@@ -6,7 +6,7 @@ import json
 
 import frappe
 import frappe.defaults
-from frappe import _, msgprint, qb
+from frappe import _, msgprint, qb, DoesNotExistError
 from frappe.contacts.address_and_contact import (
 	delete_contact_and_address,
 	load_address_and_contact,
@@ -23,6 +23,96 @@ from erpnext.utilities.transaction_base import TransactionBase
 
 
 class Customer(TransactionBase):
+
+	def link_with_lead_contact_and_address(self):
+		for row in self.leads:
+			links = frappe.get_all(
+				"Dynamic Link",
+				filters={"link_doctype": "Lead", "link_name": row.lead},
+				fields=["parent", "parenttype"],
+			)
+			for link in links:
+				linked_doc = frappe.get_doc(link["parenttype"], link["parent"])
+				exists = False
+
+				for d in linked_doc.get("links"):
+					if d.link_doctype == self.doctype and d.link_name == self.name:
+						exists = True
+
+				if not exists:
+					linked_doc.append("links", {"link_doctype": self.doctype, "link_name": self.name})
+					linked_doc.save(ignore_permissions=True)
+
+	@property
+	def total_buying_amount(self):
+		grand_total = 0
+
+		links = frappe.get_list(
+			"Sales Order",
+			filters={"customer_name": self.name},
+			fields=["grand_total"],
+		)
+
+		for link in links:
+			grand_total += link["grand_total"]
+
+		return grand_total
+
+	@property
+	def in_zalo_groups(self):
+		zalo_groups = set()
+
+		links = frappe.get_all(
+			"Sales Order",
+			filters={"customer_name": self.name},
+			fields=["source", "campaign"],
+		)
+
+		for link in links:
+			if link["source"] != "Zalo Group":
+				continue
+			zalo_groups.add(link["campaign"])
+
+		return "; ".join(zalo_groups)
+
+	@property
+	def zalo_group_url(self):
+		endpoint = frappe.db.get_single_value("CRM Settings", "zalo_group_base_url")
+
+		if not endpoint or not self.zalo:
+			return "No URL for Zalo Group"
+
+		return f'{endpoint}/{self.zalo}'
+
+	@property
+	def sales_person(self):
+		no_sale_person_found_message = "No sales person found"
+		sales_orders = frappe.get_all(
+			"Sales Order",
+			filters={"customer_name": self.name},
+			fields=["name"],
+			order_by="creation desc",
+			limit=1
+		)
+
+		if not sales_orders:
+			return no_sale_person_found_message
+
+		full_sales_order = frappe.get_doc("Sales Order", sales_orders[0]["name"])
+		if not full_sales_order.sales_team:
+			return no_sale_person_found_message
+
+		sale_person_name = full_sales_order.sales_team[0].sales_person
+		sales_person = frappe.get_doc("Sales Person", sale_person_name)
+
+		if not sales_person:
+			return no_sale_person_found_message
+
+		if not sales_person.sales_person_phone_number:
+			return sales_person.sales_person_name
+
+		return f'{sales_person.sales_person_name}/{sales_person.sales_person_phone_number}'
+
 	def onload(self):
 		"""Load address and contacts in `__onload`"""
 		load_address_and_contact(self)
@@ -422,14 +512,14 @@ def get_loyalty_programs(doc):
 			not loyalty_program.customer_group
 			or doc.customer_group
 			in get_nested_links(
-				"Customer Group", loyalty_program.customer_group, doc.flags.ignore_permissions
-			)
+			"Customer Group", loyalty_program.customer_group, doc.flags.ignore_permissions
+		)
 		) and (
 			not loyalty_program.customer_territory
 			or doc.territory
 			in get_nested_links(
-				"Territory", loyalty_program.customer_territory, doc.flags.ignore_permissions
-			)
+			"Territory", loyalty_program.customer_territory, doc.flags.ignore_permissions
+		)
 		):
 			lp_details.append(loyalty_program.name)
 
@@ -600,8 +690,8 @@ def get_customer_outstanding(
 
 		if dn_amount > si_amount and dn_item.base_net_total:
 			outstanding_based_on_dn += (
-				(dn_amount - si_amount) / dn_item.base_net_total
-			) * dn_item.base_grand_total
+										   (dn_amount - si_amount) / dn_item.base_net_total
+									   ) * dn_item.base_grand_total
 
 	return outstanding_based_on_gle + outstanding_based_on_so + outstanding_based_on_dn
 
@@ -698,3 +788,174 @@ def get_customer_primary_contact(doctype, txt, searchfield, start, page_len, fil
 		.where((dlink.link_name == customer) & (con.name.like(f"%{txt}%")))
 		.run()
 	)
+
+@frappe.whitelist()
+def is_customer_in_zalo_group(phone_number: str):
+	customers = frappe.db.get_list('Customer',
+								 filters={
+									 'zalo': phone_number
+								 },
+								 fields=['name'],
+								 start=0,
+								 page_length=1)
+
+	if not customers:
+		raise DoesNotExistError
+
+	return "ok"
+
+@frappe.whitelist()
+def get_customer_zalo_group(token: str):
+	from frappe.contacts.doctype.address.address import get_default_address
+	from dateutil.relativedelta import relativedelta
+
+	phone_number = get_jwt_token(token)
+	# phone_number = phonenumber
+
+	customers = frappe.db.get_list('Customer',
+								 filters={
+									 'zalo': phone_number
+								 },
+								 fields=['name'],
+								 start=0,
+								 page_length=1)
+
+	if not customers:
+		raise DoesNotExistError
+
+	contact = customers[0]
+	address = get_default_address('Customer', contact['name'])
+	if not address:
+		raise DoesNotExistError
+
+
+	addresss = frappe.get_all(
+	"Address",
+	filters=[
+		["Dynamic Link", "link_doctype", "=", 'Customer'],
+		["Dynamic Link", "link_name", "=", contact['name']],
+		["disabled", "=", 0],
+	],
+	fields=["address_line1", "country", "phone"],
+	limit=1,
+	)
+	contact['address'] = addresss[0] if addresss else None
+
+	sales_orders = frappe.get_all(
+		"Sales Order",
+		filters={"customer_name": contact['name']},
+		fields=["name", "grand_total"],
+		order_by="creation"
+	)
+
+	if not sales_orders:
+		raise DoesNotExistError
+
+	contact['total_order'] = len(sales_orders)
+	grand_total = 0
+	total_discount = 0
+	enroll_date = None
+	expired_date = None
+
+	orders = list()
+	ix = 1
+	for sales_order in sales_orders:
+		full_sales_order = frappe.get_doc("Sales Order", sales_order["name"])
+		grand_total += sales_order["grand_total"]
+		for item in full_sales_order.items:
+			if item.amount < 0:
+				total_discount += - item.amount
+		if enroll_date is None:
+			enroll_date = full_sales_order.transaction_date
+		orders.append(map_order_item(full_sales_order))
+		if ix == len(sales_orders):
+			expired_date = full_sales_order.transaction_date
+			contact['sales_person'] = get_order_sales_person(full_sales_order)
+
+		ix = ix + 1
+
+	contact['orders'] = orders
+	contact['total_amount'] = grand_total
+	contact['total_discount'] = total_discount
+	contact['enroll_date'] = enroll_date
+	contact['expired_date'] = expired_date + relativedelta(years=1) if expired_date else None
+
+	return contact
+
+@frappe.whitelist(allow_guest=True)
+def get_jwt_token(token: str):
+	target_audience = frappe.db.get_single_value("CRM Settings", "target_audience")
+	target_issuer = frappe.db.get_single_value("CRM Settings", "target_issuer")
+	certificate_url = 'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com'
+
+	import urllib3, json
+	from jose import jwt
+	import phonenumbers
+
+
+	response = urllib3.request("GET", certificate_url)
+	certs = response.json()
+
+	# will throw error if not valid
+	user = jwt.decode(token, certs,  options={
+                'verify_signature': True,
+                'verify_aud': True,
+                'verify_iat': True,
+                'verify_exp': True,
+                'verify_nbf': True,
+                'verify_iss': True,
+                'verify_sub': True,
+                'verify_jti': True,
+                'verify_at_hash': True,
+                'require_aud': True,
+                'require_iat': True,
+                'require_exp': True,
+                'require_nbf': False,
+                'require_iss': True,
+                'require_sub': True,
+                'require_jti': False,
+                'require_at_hash': False,
+                'leeway': 0,
+            }, algorithms='RS256', audience=target_audience, issuer=target_issuer)
+
+	x = phonenumbers.parse(user["phone_number"], "84")
+	x = phonenumbers.format_number(x, phonenumbers.PhoneNumberFormat.NATIONAL).replace(" ", "")
+	return x
+
+def map_order_item(order):
+	item = {"order_placed_date": order.transaction_date}
+
+	total_discount = 0
+	items = list()
+	for s_item in order.items:
+		if s_item.amount < 0:
+			total_discount += - s_item.amount
+			continue
+
+		if s_item.item_code == "Discount" or s_item.item_code == "Shipping":
+			continue
+
+		items.append({
+			"item_name": s_item.item_name,
+			"quantity": s_item.qty,
+		})
+
+	item["items"] = items
+	item["subtotal"] = total_discount + order.grand_total
+	item["discount"] = total_discount
+	item["final_amount"] = order.grand_total
+	item["paymend_method"] = "cod"
+
+	return item
+
+def get_order_sales_person(order):
+	# return order.sales_team
+	if order.sales_team:
+		sale_person_name = order.sales_team[0].sales_person
+		sales_person = frappe.get_doc("Sales Person", sale_person_name)
+
+		if sales_person:
+			return  {"sales_person_name": sales_person.sales_person_name, "sales_person_phone_number": sales_person.sales_person_phone_number}
+
+	return None
+

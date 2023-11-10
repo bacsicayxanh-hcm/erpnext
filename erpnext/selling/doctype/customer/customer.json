@@ -16,6 +16,13 @@
   "customer_name",
   "customer_type",
   "customer_group",
+  "zalo",
+  "facebook",
+  "fb_id",
+  "total_buying_amount",
+  "in_zalo_groups",
+  "zalo_group_url",
+  "sales_person",
   "column_break0",
   "territory",
   "gender",
@@ -39,6 +46,7 @@
   "customer_pos_id",
   "website",
   "language",
+  "pancake_id",
   "column_break_45",
   "customer_details",
   "dashboard_tab",
@@ -106,7 +114,8 @@
    "fieldname": "salutation",
    "fieldtype": "Link",
    "label": "Salutation",
-   "options": "Salutation"
+   "options": "Salutation",
+   "hidden": 1
   },
   {
    "bold": 1,
@@ -182,6 +191,54 @@
    "oldfieldtype": "Link",
    "options": "Customer Group",
    "search_index": 1
+  },
+  {
+    "fieldname": "zalo",
+    "fieldtype": "Data",
+    "label": "Zalo",
+    "options": "Phone"
+  },
+  {
+    "fieldname": "facebook",
+    "fieldtype": "Data",
+    "label": "Facebook"
+  },
+  {
+    "fieldname": "fb_id",
+    "fieldtype": "Data",
+    "label": "Facebook Id"
+  },
+  {
+    "fetch_from": "",
+   "fieldname": "total_buying_amount",
+   "fieldtype": "Currency",
+   "label": "Total buying amount",
+   "read_only": 1,
+   "is_virtual": 1
+  },
+  {
+    "fetch_from": "",
+   "fieldname": "in_zalo_groups",
+   "fieldtype": "Data",
+   "label": "Zalo groups",
+   "read_only": 1,
+   "is_virtual": 1
+  },
+  {
+   "fetch_from": "",
+   "fieldname": "zalo_group_url",
+   "fieldtype": "Data",
+   "label": "Zalo group URL",
+   "read_only": 1,
+   "is_virtual": 1
+  },
+  {
+   "fetch_from": "",
+   "fieldname": "sales_person",
+   "fieldtype": "Data",
+   "label": "Sales person",
+   "read_only": 1,
+   "is_virtual": 1
   },
   {
    "fieldname": "territory",
@@ -277,6 +334,13 @@
    "fieldtype": "Data",
    "label": "Website"
   },
+   {
+   "fieldname": "pancake_id",
+   "fieldtype": "Data",
+   "label": "Pancake Id",
+   "description": "Pancake Id for this customer, using when syncing from Pancakes",
+   "set_only_once": 1
+   },
   {
    "fieldname": "column_break1",
    "fieldtype": "Column Break",
@@ -662,7 +726,7 @@
   }
  ],
  "quick_entry": 1,
- "search_fields": "customer_name,customer_group,territory, mobile_no,primary_address",
+ "search_fields": "customer_name,customer_group,zalo,facebook,territory, mobile_no,primary_address",
  "show_name_in_global_search": 1,
  "sort_field": "modified",
  "sort_order": "ASC",

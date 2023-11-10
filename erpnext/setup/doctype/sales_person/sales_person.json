@@ -11,6 +11,7 @@
  "field_order": [
   "name_and_employee_id",
   "sales_person_name",
+  "sales_person_phone_number",
   "parent_sales_person",
   "commission_rate",
   "is_group",
@@ -40,6 +41,13 @@
    "oldfieldtype": "Data",
    "reqd": 1,
    "unique": 1
+  },
+  {
+    "fieldname": "sales_person_phone_number",
+    "fieldtype": "Data",
+    "in_list_view": 1,
+    "label": "Phone number",
+    "options": "Phone"
   },
   {
    "description": "Select company name first.",
