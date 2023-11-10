@@ -106,7 +106,8 @@
    "fieldname": "salutation",
    "fieldtype": "Link",
    "label": "Salutation",
-   "options": "Salutation"
+   "options": "Salutation",
+   "hidden": 1
   },
   {
    "bold": 1,
