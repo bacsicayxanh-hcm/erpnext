@@ -27,12 +27,12 @@
     "contact_info_tab",
     "email_id",
     "zalo",
+    "facebook",
     "column_break_20",
-    "mobile_no",
-    "whatsapp_no",
-    "column_break_16",
     "phone",
     "phone_ext",
+    "mobile_no",
+    "column_break_16",
     "organization_section",
     "company_name",
     "no_of_employees",
@@ -364,6 +364,11 @@
       "fieldtype": "Data",
       "label": "Zalo",
       "options": "Phone"
+    },
+    {
+      "fieldname": "facebook",
+      "fieldtype": "Data",
+      "label": "Facebook"
     },
     {
       "fieldname": "column_break_50",
