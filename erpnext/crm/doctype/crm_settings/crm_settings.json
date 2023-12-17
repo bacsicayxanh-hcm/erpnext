@@ -17,7 +17,8 @@
   "quotation_section",
   "default_valid_till",
   "section_break_13",
-  "carry_forward_communication_and_comments"
+  "carry_forward_communication_and_comments",
+  "last_sync_pancake_order"
  ],
  "fields": [
   {
@@ -85,6 +86,13 @@
    "fieldname": "carry_forward_communication_and_comments",
    "fieldtype": "Check",
    "label": "Carry Forward Communication and Comments"
+  },
+  {
+   "default": "",
+   "description": "Last sync Pancake Order",
+   "fieldname": "last_sync_pancake_order",
+   "fieldtype": "Data",
+   "label": "Last sync Pancake Order"
   }
  ],
  "icon": "fa fa-cog",
