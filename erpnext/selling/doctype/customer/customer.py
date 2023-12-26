@@ -23,6 +23,60 @@ from erpnext.utilities.transaction_base import TransactionBase
 
 
 class Customer(TransactionBase):
+
+	def link_with_lead_contact_and_address(self):
+		for row in self.leads:
+			links = frappe.get_all(
+				"Dynamic Link",
+				filters={"link_doctype": "Lead", "link_name": row.lead},
+				fields=["parent", "parenttype"],
+			)
+			for link in links:
+				linked_doc = frappe.get_doc(link["parenttype"], link["parent"])
+				exists = False
+
+				for d in linked_doc.get("links"):
+					if d.link_doctype == self.doctype and d.link_name == self.name:
+						exists = True
+
+				if not exists:
+					linked_doc.append("links", {"link_doctype": self.doctype, "link_name": self.name})
+					linked_doc.save(ignore_permissions=True)
+
+	@property
+	def total_buying_amount(self):
+		grand_total = 0
+
+		links = frappe.get_all(
+			"Sales Order",
+			filters={"customer_name": self.name},
+			fields=["grand_total"],
+		)
+
+		for link in links:
+			grand_total += link["grand_total"]
+
+
+		return grand_total
+
+	@property
+	def in_zalo_groups(self):
+		zalo_groups =  set()
+
+		links = frappe.get_all(
+			"Sales Order",
+			filters={"customer_name": self.name},
+			fields=["source", "campaign"],
+		)
+
+		for link in links:
+			if link["source"] != "Zalo Group":
+				continue
+			zalo_groups.add(link["campaign"])
+
+
+		return "; ".join(zalo_groups)
+
 	def onload(self):
 		"""Load address and contacts in `__onload`"""
 		load_address_and_contact(self)
@@ -422,14 +476,14 @@ def get_loyalty_programs(doc):
 			not loyalty_program.customer_group
 			or doc.customer_group
 			in get_nested_links(
-				"Customer Group", loyalty_program.customer_group, doc.flags.ignore_permissions
-			)
+			"Customer Group", loyalty_program.customer_group, doc.flags.ignore_permissions
+		)
 		) and (
 			not loyalty_program.customer_territory
 			or doc.territory
 			in get_nested_links(
-				"Territory", loyalty_program.customer_territory, doc.flags.ignore_permissions
-			)
+			"Territory", loyalty_program.customer_territory, doc.flags.ignore_permissions
+		)
 		):
 			lp_details.append(loyalty_program.name)
 
@@ -600,8 +654,8 @@ def get_customer_outstanding(
 
 		if dn_amount > si_amount and dn_item.base_net_total:
 			outstanding_based_on_dn += (
-				(dn_amount - si_amount) / dn_item.base_net_total
-			) * dn_item.base_grand_total
+										   (dn_amount - si_amount) / dn_item.base_net_total
+									   ) * dn_item.base_grand_total
 
 	return outstanding_based_on_gle + outstanding_based_on_so + outstanding_based_on_dn
 

@@ -19,6 +19,8 @@
   "zalo",
   "facebook",
   "fb_id",
+  "total_buying_amount",
+  "in_zalo_groups",
   "column_break0",
   "territory",
   "gender",
@@ -203,6 +205,22 @@
     "fieldname": "fb_id",
     "fieldtype": "Data",
     "label": "Facebook Id"
+  },
+  {
+    "fetch_from": "",
+   "fieldname": "total_buying_amount",
+   "fieldtype": "Currency",
+   "label": "Total buying amount",
+   "read_only": 1,
+   "is_virtual": 1
+  },
+  {
+    "fetch_from": "",
+   "fieldname": "in_zalo_groups",
+   "fieldtype": "Data",
+   "label": "Zalo groups",
+   "read_only": 1,
+   "is_virtual": 1
   },
   {
    "fieldname": "territory",
