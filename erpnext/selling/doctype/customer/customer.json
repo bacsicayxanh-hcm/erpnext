@@ -16,6 +16,9 @@
   "customer_name",
   "customer_type",
   "customer_group",
+  "zalo",
+  "facebook",
+  "fb_id",
   "column_break0",
   "territory",
   "gender",
@@ -184,6 +187,22 @@
    "oldfieldtype": "Link",
    "options": "Customer Group",
    "search_index": 1
+  },
+  {
+    "fieldname": "zalo",
+    "fieldtype": "Data",
+    "label": "Zalo",
+    "options": "Phone"
+  },
+  {
+    "fieldname": "facebook",
+    "fieldtype": "Data",
+    "label": "Facebook"
+  },
+  {
+    "fieldname": "fb_id",
+    "fieldtype": "Data",
+    "label": "Facebook Id"
   },
   {
    "fieldname": "territory",
@@ -671,7 +690,7 @@
   }
  ],
  "quick_entry": 1,
- "search_fields": "customer_name,customer_group,territory, mobile_no,primary_address",
+ "search_fields": "customer_name,customer_group,zalo,facebook,territory, mobile_no,primary_address",
  "show_name_in_global_search": 1,
  "sort_field": "modified",
  "sort_order": "ASC",
