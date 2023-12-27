@@ -751,8 +751,22 @@ def get_customer_primary_contact(doctype, txt, searchfield, start, page_len, fil
 		.run()
 	)
 
+@frappe.whitelist()
+def is_customer_in_zalo_group(phone_number: str):
+	customers = frappe.db.get_list('Customer',
+								 filters={
+									 'zalo': phone_number
+								 },
+								 fields=['name'],
+								 start=0,
+								 page_length=1)
 
-@frappe.whitelist(allow_guest=True)
+	if not customers:
+		raise DoesNotExistError
+
+	return "ok"
+
+@frappe.whitelist()
 def get_customer_zalo_group(token: str):
 	from frappe.contacts.doctype.address.address import get_default_address
 	from dateutil.relativedelta import relativedelta
