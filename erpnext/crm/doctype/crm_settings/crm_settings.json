@@ -18,7 +18,9 @@
   "default_valid_till",
   "section_break_13",
   "carry_forward_communication_and_comments",
-  "last_sync_pancake_order"
+  "last_sync_pancake_order",
+  "target_audience",
+  "target_issuer"
  ],
  "fields": [
   {
@@ -93,6 +95,20 @@
    "fieldname": "last_sync_pancake_order",
    "fieldtype": "Data",
    "label": "Last sync Pancake Order"
+  },
+  {
+   "default": "bscx-test",
+   "description": "Audience for validate token",
+   "fieldname": "target_audience",
+   "fieldtype": "Data",
+   "label": "JWT Audience"
+  },
+  {
+   "default": "https://securetoken.google.com/bscx-test",
+   "description": "Issuer for validate token",
+   "fieldname": "target_issuer",
+   "fieldtype": "Data",
+   "label": "JWT Issuer"
   }
  ],
  "icon": "fa fa-cog",
