@@ -75,6 +75,44 @@ class Customer(TransactionBase):
 
 		return "; ".join(zalo_groups)
 
+	@property
+	def zalo_group_url(self):
+		endpoint = frappe.db.get_single_value("CRM Settings", "zalo_group_base_url")
+
+		if not endpoint or not self.zalo:
+			return "No URL for Zalo Group"
+
+		return f'{endpoint}/{self.zalo}'
+
+	@property
+	def sales_person(self):
+		no_sale_person_found_message = "No sales person found"
+		sales_orders = frappe.get_all(
+			"Sales Order",
+			filters={"customer_name": self.name},
+			fields=["name"],
+			order_by="creation desc",
+			limit=1
+		)
+
+		if not sales_orders:
+			return no_sale_person_found_message
+
+		full_sales_order = frappe.get_doc("Sales Order", sales_orders[0]["name"])
+		if not full_sales_order.sales_team:
+			return no_sale_person_found_message
+
+		sale_person_name = full_sales_order.sales_team[0].sales_person
+		sales_person = frappe.get_doc("Sales Person", sale_person_name)
+
+		if not sales_person:
+			return no_sale_person_found_message
+
+		if not sales_person.sales_person_phone_number:
+			return sales_person.sales_person_name
+
+		return f'{sales_person.sales_person_name}/{sales_person.sales_person_phone_number}'
+
 	def onload(self):
 		"""Load address and contacts in `__onload`"""
 		load_address_and_contact(self)

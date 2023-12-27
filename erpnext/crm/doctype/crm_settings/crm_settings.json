@@ -109,6 +109,13 @@
    "fieldname": "target_issuer",
    "fieldtype": "Data",
    "label": "JWT Issuer"
+  },
+  {
+   "default": "https://zalogroup.bacsicayxanh.vn/",
+   "description": "Zalo group base URL",
+   "fieldname": "zalo_group_base_url",
+   "fieldtype": "Data",
+   "label": "Zalo group base URL"
   }
  ],
  "icon": "fa fa-cog",

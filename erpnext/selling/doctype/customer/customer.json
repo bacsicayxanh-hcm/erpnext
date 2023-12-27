@@ -21,6 +21,8 @@
   "fb_id",
   "total_buying_amount",
   "in_zalo_groups",
+  "zalo_group_url",
+  "sales_person",
   "column_break0",
   "territory",
   "gender",
@@ -219,6 +221,22 @@
    "fieldname": "in_zalo_groups",
    "fieldtype": "Data",
    "label": "Zalo groups",
+   "read_only": 1,
+   "is_virtual": 1
+  },
+  {
+   "fetch_from": "",
+   "fieldname": "zalo_group_url",
+   "fieldtype": "Data",
+   "label": "Zalo group URL",
+   "read_only": 1,
+   "is_virtual": 1
+  },
+  {
+   "fetch_from": "",
+   "fieldname": "sales_person",
+   "fieldtype": "Data",
+   "label": "Sales person",
    "read_only": 1,
    "is_virtual": 1
   },
