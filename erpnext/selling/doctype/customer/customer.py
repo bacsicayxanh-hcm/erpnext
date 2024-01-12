@@ -868,8 +868,10 @@ def get_customer_zalo_group(token: str):
 		if enroll_date is None:
 			enroll_date = full_sales_order.transaction_date
 		orders.append(map_order_item(full_sales_order))
-		if ix == len(sales_orders):
+		# expired date is
+		if ix == 1:
 			expired_date = full_sales_order.transaction_date
+		if ix == len(sales_orders):
 			contact['sales_person'] = get_order_sales_person(full_sales_order)
 
 		ix = ix + 1
