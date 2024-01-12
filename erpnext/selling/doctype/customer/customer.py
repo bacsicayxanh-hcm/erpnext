@@ -845,7 +845,7 @@ def get_customer_zalo_group(token: str):
 		"Sales Order",
 		filters={"customer_name": contact['name']},
 		fields=["name", "grand_total"],
-		order_by="creation"
+		order_by="transaction_date asc"
 	)
 
 	if not sales_orders:
