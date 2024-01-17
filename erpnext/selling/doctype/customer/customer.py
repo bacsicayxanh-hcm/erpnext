@@ -821,12 +821,11 @@ def is_customer_in_zalo_group(phone_number: str):
 	return "ok"
 
 @frappe.whitelist()
-def get_customer_zalo_group(phonenumber: str):
+def get_customer_zalo_group(token: str):
 	from frappe.contacts.doctype.address.address import get_default_address
 	from dateutil.relativedelta import relativedelta
 
-	# phone_number = get_jwt_token(token)
-	phone_number = phonenumber
+	phone_number = get_jwt_token(token)
 
 	customers = frappe.db.get_list('Customer',
 								 filters={
@@ -903,7 +902,7 @@ def get_jwt_token(token: str):
 	target_issuer = frappe.db.get_single_value("CRM Settings", "target_issuer")
 	certificate_url = 'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com'
 
-	import urllib3, json
+	import urllib3
 	from jose import jwt
 	import phonenumbers
 
@@ -930,7 +929,7 @@ def get_jwt_token(token: str):
                 'require_sub': True,
                 'require_jti': False,
                 'require_at_hash': False,
-                'leeway': 0,
+                'leeway': 30,
             }, algorithms='RS256', audience=target_audience, issuer=target_issuer)
 
 	x = phonenumbers.parse(user["phone_number"], "84")
