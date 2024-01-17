@@ -791,6 +791,7 @@ def get_customer_primary_contact(doctype, txt, searchfield, start, page_len, fil
 
 @frappe.whitelist()
 def is_customer_in_zalo_group(phone_number: str):
+	from frappe.contacts.doctype.address.address import get_default_address
 	customers = frappe.db.get_list('Customer',
 								 filters={
 									 'zalo': phone_number
@@ -802,15 +803,30 @@ def is_customer_in_zalo_group(phone_number: str):
 	if not customers:
 		raise DoesNotExistError
 
+	contact = customers[0]
+	address = get_default_address('Customer', contact['name'])
+	if address:
+		raise DoesNotExistError
+
+	sales_orders = frappe.get_all(
+		"Sales Order",
+		filters={"customer_name": contact['name']},
+		fields=["name", "grand_total"],
+		order_by="transaction_date asc"
+	)
+
+	if not sales_orders:
+		raise DoesNotExistError
+
 	return "ok"
 
 @frappe.whitelist()
-def get_customer_zalo_group(token: str):
+def get_customer_zalo_group(phonenumber: str):
 	from frappe.contacts.doctype.address.address import get_default_address
 	from dateutil.relativedelta import relativedelta
 
-	phone_number = get_jwt_token(token)
-	# phone_number = phonenumber
+	# phone_number = get_jwt_token(token)
+	phone_number = phonenumber
 
 	customers = frappe.db.get_list('Customer',
 								 filters={
@@ -825,21 +841,18 @@ def get_customer_zalo_group(token: str):
 
 	contact = customers[0]
 	address = get_default_address('Customer', contact['name'])
-	if not address:
-		raise DoesNotExistError
-
-
-	addresss = frappe.get_all(
-	"Address",
-	filters=[
-		["Dynamic Link", "link_doctype", "=", 'Customer'],
-		["Dynamic Link", "link_name", "=", contact['name']],
-		["disabled", "=", 0],
-	],
-	fields=["address_line1", "country", "phone"],
-	limit=1,
-	)
-	contact['address'] = addresss[0] if addresss else None
+	if address:
+		addresss = frappe.get_all(
+		"Address",
+		filters=[
+			["Dynamic Link", "link_doctype", "=", 'Customer'],
+			["Dynamic Link", "link_name", "=", contact['name']],
+			["disabled", "=", 0],
+		],
+		fields=["address_line1", "country", "phone"],
+		limit=1,
+		)
+		contact['address'] = addresss[0] if addresss else None
 
 	sales_orders = frappe.get_all(
 		"Sales Order",
