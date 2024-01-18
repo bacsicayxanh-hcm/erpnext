@@ -805,7 +805,7 @@ def is_customer_in_zalo_group(phone_number: str):
 
 	contact = customers[0]
 	address = get_default_address('Customer', contact['name'])
-	if address:
+	if not address:
 		raise DoesNotExistError
 
 	sales_orders = frappe.get_all(
