@@ -11,7 +11,7 @@ from frappe.cache_manager import clear_defaults_cache
 from frappe.contacts.address_and_contact import load_address_and_contact
 from frappe.custom.doctype.property_setter.property_setter import make_property_setter
 from frappe.desk.page.setup_wizard.setup_wizard import make_records
-from frappe.utils import cint, formatdate, get_timestamp, today
+from frappe.utils import cint, formatdate, get_link_to_form, get_timestamp, today
 from frappe.utils.nestedset import NestedSet, rebuild_tree
 
 from erpnext.accounts.doctype.account.account import get_account_currency
@@ -19,6 +19,90 @@ from erpnext.setup.setup_wizard.operations.taxes_setup import setup_taxes_and_ch
 
 
 class Company(NestedSet):
+	# begin: auto-generated types
+	# This code is auto-generated. Do not modify anything in this block.
+
+	from typing import TYPE_CHECKING
+
+	if TYPE_CHECKING:
+		from frappe.types import DF
+
+		abbr: DF.Data
+		accumulated_depreciation_account: DF.Link | None
+		allow_account_creation_against_child_company: DF.Check
+		asset_received_but_not_billed: DF.Link | None
+		auto_err_frequency: DF.Literal["Daily", "Weekly"]
+		auto_exchange_rate_revaluation: DF.Check
+		book_advance_payments_in_separate_party_account: DF.Check
+		capital_work_in_progress_account: DF.Link | None
+		chart_of_accounts: DF.Literal[None]
+		company_description: DF.TextEditor | None
+		company_logo: DF.AttachImage | None
+		company_name: DF.Data
+		cost_center: DF.Link | None
+		country: DF.Link
+		create_chart_of_accounts_based_on: DF.Literal["", "Standard Template", "Existing Company"]
+		credit_limit: DF.Currency
+		date_of_commencement: DF.Date | None
+		date_of_establishment: DF.Date | None
+		date_of_incorporation: DF.Date | None
+		default_advance_paid_account: DF.Link | None
+		default_advance_received_account: DF.Link | None
+		default_bank_account: DF.Link | None
+		default_buying_terms: DF.Link | None
+		default_cash_account: DF.Link | None
+		default_currency: DF.Link
+		default_deferred_expense_account: DF.Link | None
+		default_deferred_revenue_account: DF.Link | None
+		default_discount_account: DF.Link | None
+		default_expense_account: DF.Link | None
+		default_finance_book: DF.Link | None
+		default_holiday_list: DF.Link | None
+		default_in_transit_warehouse: DF.Link | None
+		default_income_account: DF.Link | None
+		default_inventory_account: DF.Link | None
+		default_letter_head: DF.Link | None
+		default_payable_account: DF.Link | None
+		default_provisional_account: DF.Link | None
+		default_receivable_account: DF.Link | None
+		default_selling_terms: DF.Link | None
+		default_warehouse_for_sales_return: DF.Link | None
+		depreciation_cost_center: DF.Link | None
+		depreciation_expense_account: DF.Link | None
+		disposal_account: DF.Link | None
+		domain: DF.Data | None
+		email: DF.Data | None
+		enable_perpetual_inventory: DF.Check
+		enable_provisional_accounting_for_non_stock_items: DF.Check
+		exception_budget_approver_role: DF.Link | None
+		exchange_gain_loss_account: DF.Link | None
+		existing_company: DF.Link | None
+		fax: DF.Data | None
+		is_group: DF.Check
+		lft: DF.Int
+		monthly_sales_target: DF.Currency
+		old_parent: DF.Data | None
+		parent_company: DF.Link | None
+		payment_terms: DF.Link | None
+		phone_no: DF.Data | None
+		registration_details: DF.Code | None
+		rgt: DF.Int
+		round_off_account: DF.Link | None
+		round_off_cost_center: DF.Link | None
+		sales_monthly_history: DF.SmallText | None
+		series_for_depreciation_entry: DF.Data | None
+		stock_adjustment_account: DF.Link | None
+		stock_received_but_not_billed: DF.Link | None
+		submit_err_jv: DF.Check
+		tax_id: DF.Data | None
+		total_monthly_sales: DF.Currency
+		transactions_annual_history: DF.Code | None
+		unrealized_exchange_gain_loss_account: DF.Link | None
+		unrealized_profit_loss_account: DF.Link | None
+		website: DF.Data | None
+		write_off_account: DF.Link | None
+	# end: auto-generated types
+
 	nsm_parent_field = "parent_company"
 
 	def onload(self):
@@ -38,9 +122,8 @@ class Company(NestedSet):
 			"Supplier Quotation",
 		]:
 			if frappe.db.sql(
-				"""select name from `tab%s` where company=%s and docstatus=1
-					limit 1"""
-				% (doctype, "%s"),
+				"""select name from `tab{}` where company={} and docstatus=1
+					limit 1""".format(doctype, "%s"),
 				self.name,
 			):
 				exists = True
@@ -56,6 +139,7 @@ class Company(NestedSet):
 		self.validate_abbr()
 		self.validate_default_accounts()
 		self.validate_currency()
+		self.validate_advance_account_currency()
 		self.validate_coa_input()
 		self.validate_perpetual_inventory()
 		self.validate_provisional_account_for_non_stock_items()
@@ -73,9 +157,7 @@ class Company(NestedSet):
 		if not self.abbr.strip():
 			frappe.throw(_("Abbreviation is mandatory"))
 
-		if frappe.db.sql(
-			"select abbr from tabCompany where name!=%s and abbr=%s", (self.name, self.abbr)
-		):
+		if frappe.db.sql("select abbr from tabCompany where name!=%s and abbr=%s", (self.name, self.abbr)):
 			frappe.throw(_("Abbreviation already used for another company"))
 
 	@frappe.whitelist()
@@ -99,7 +181,9 @@ class Company(NestedSet):
 				for_company = frappe.db.get_value("Account", self.get(account[1]), "company")
 				if for_company != self.name:
 					frappe.throw(
-						_("Account {0} does not belong to company: {1}").format(self.get(account[1]), self.name)
+						_("Account {0} does not belong to company: {1}").format(
+							self.get(account[1]), self.name
+						)
 					)
 
 				if get_account_currency(self.get(account[1])) != self.default_currency:
@@ -108,12 +192,33 @@ class Company(NestedSet):
 					).format(frappe.bold(account[0]))
 					frappe.throw(error_message)
 
+	def validate_advance_account_currency(self):
+		if (
+			self.default_advance_received_account
+			and frappe.get_cached_value("Account", self.default_advance_received_account, "account_currency")
+			!= self.default_currency
+		):
+			frappe.throw(
+				_("'{0}' should be in company currency {1}.").format(
+					frappe.bold("Default Advance Received Account"), frappe.bold(self.default_currency)
+				)
+			)
+
+		if (
+			self.default_advance_paid_account
+			and frappe.get_cached_value("Account", self.default_advance_paid_account, "account_currency")
+			!= self.default_currency
+		):
+			frappe.throw(
+				_("'{0}' should be in company currency {1}.").format(
+					frappe.bold("Default Advance Paid Account"), frappe.bold(self.default_currency)
+				)
+			)
+
 	def validate_currency(self):
 		if self.is_new():
 			return
-		self.previous_default_currency = frappe.get_cached_value(
-			"Company", self.name, "default_currency"
-		)
+		self.previous_default_currency = frappe.get_cached_value("Company", self.name, "default_currency")
 		if (
 			self.default_currency
 			and self.previous_default_currency
@@ -165,7 +270,7 @@ class Company(NestedSet):
 		if frappe.flags.parent_company_changed:
 			from frappe.utils.nestedset import rebuild_tree
 
-			rebuild_tree("Company", "parent_company")
+			rebuild_tree("Company")
 
 		frappe.clear_cache()
 
@@ -177,20 +282,17 @@ class Company(NestedSet):
 			{"warehouse_name": _("Finished Goods"), "is_group": 0},
 			{"warehouse_name": _("Goods In Transit"), "is_group": 0, "warehouse_type": "Transit"},
 		]:
-
-			if not frappe.db.exists(
-				"Warehouse", "{0} - {1}".format(wh_detail["warehouse_name"], self.abbr)
-			):
+			if not frappe.db.exists("Warehouse", "{} - {}".format(wh_detail["warehouse_name"], self.abbr)):
 				warehouse = frappe.get_doc(
 					{
 						"doctype": "Warehouse",
 						"warehouse_name": wh_detail["warehouse_name"],
 						"is_group": wh_detail["is_group"],
 						"company": self.name,
-						"parent_warehouse": "{0} - {1}".format(_("All Warehouses"), self.abbr)
+						"parent_warehouse": "{} - {}".format(_("All Warehouses"), self.abbr)
 						if not wh_detail["is_group"]
 						else "",
-						"warehouse_type": wh_detail["warehouse_type"] if "warehouse_type" in wh_detail else None,
+						"warehouse_type": wh_detail.get("warehouse_type"),
 					}
 				)
 				warehouse.flags.ignore_permissions = True
@@ -212,9 +314,7 @@ class Company(NestedSet):
 
 		self.db_set(
 			"default_payable_account",
-			frappe.db.get_value(
-				"Account", {"company": self.name, "account_type": "Payable", "is_group": 0}
-			),
+			frappe.db.get_value("Account", {"company": self.name, "account_type": "Payable", "is_group": 0}),
 		)
 
 	def create_default_departments(self):
@@ -313,7 +413,7 @@ class Company(NestedSet):
 		frappe.local.flags.ignore_update_nsm = True
 		make_records(records)
 		frappe.local.flags.ignore_update_nsm = False
-		rebuild_tree("Department", "parent_department")
+		rebuild_tree("Department")
 
 	def validate_coa_input(self):
 		if self.create_chart_of_accounts_based_on == "Existing Company":
@@ -341,7 +441,9 @@ class Company(NestedSet):
 				and not self.default_provisional_account
 			):
 				frappe.throw(
-					_("Set default {0} account for non stock items").format(frappe.bold("Provisional Account"))
+					_("Set default {0} account for non stock items").format(
+						frappe.bold("Provisional Account")
+					)
 				)
 
 			make_property_setter(
@@ -356,9 +458,7 @@ class Company(NestedSet):
 	def check_country_change(self):
 		frappe.flags.country_change = False
 
-		if not self.is_new() and self.country != frappe.get_cached_value(
-			"Company", self.name, "country"
-		):
+		if not self.is_new() and self.country != frappe.get_cached_value("Company", self.name, "country"):
 			frappe.flags.country_change = True
 
 	def set_chart_of_accounts(self):
@@ -525,14 +625,14 @@ class Company(NestedSet):
 			)
 
 			for doctype in ["Account", "Cost Center", "Budget", "Party Account"]:
-				frappe.db.sql("delete from `tab{0}` where company = %s".format(doctype), self.name)
+				frappe.db.sql(f"delete from `tab{doctype}` where company = %s", self.name)
 
 		if not frappe.db.get_value("Stock Ledger Entry", {"company": self.name}):
 			frappe.db.sql("""delete from `tabWarehouse` where company=%s""", self.name)
 
 		frappe.defaults.clear_default("company", value=self.name)
 		for doctype in ["Mode of Payment Account", "Item Default"]:
-			frappe.db.sql("delete from `tab{0}` where company = %s".format(doctype), self.name)
+			frappe.db.sql(f"delete from `tab{doctype}` where company = %s", self.name)
 
 		# clear default accounts, warehouses from item
 		warehouses = frappe.db.sql_list("select name from tabWarehouse where company=%s", self.name)
@@ -565,7 +665,7 @@ class Company(NestedSet):
 			frappe.db.sql("delete from tabBOM where company=%s", self.name)
 			for dt in ("BOM Operation", "BOM Item", "BOM Scrap Item", "BOM Explosion Item"):
 				frappe.db.sql(
-					"delete from `tab%s` where parent in (%s)" "" % (dt, ", ".join(["%s"] * len(boms))),
+					"delete from `tab{}` where parent in ({})" "".format(dt, ", ".join(["%s"] * len(boms))),
 					tuple(boms),
 				)
 
@@ -621,7 +721,7 @@ def update_company_current_month_sales(company):
 	current_month_year = formatdate(today(), "MM-yyyy")
 
 	results = frappe.db.sql(
-		"""
+		f"""
 		SELECT
 			SUM(base_grand_total) AS total,
 			DATE_FORMAT(`posting_date`, '%m-%Y') AS month_year
@@ -630,12 +730,10 @@ def update_company_current_month_sales(company):
 		WHERE
 			DATE_FORMAT(`posting_date`, '%m-%Y') = '{current_month_year}'
 			AND docstatus = 1
-			AND company = {company}
+			AND company = {frappe.db.escape(company)}
 		GROUP BY
 			month_year
-	""".format(
-			current_month_year=current_month_year, company=frappe.db.escape(company)
-		),
+	""",
 		as_dict=True,
 	)
 
@@ -650,9 +748,7 @@ def update_company_monthly_sales(company):
 
 	from frappe.utils.goal import get_monthly_results
 
-	filter_str = "company = {0} and status != 'Draft' and docstatus=1".format(
-		frappe.db.escape(company)
-	)
+	filter_str = f"company = {frappe.db.escape(company)} and status != 'Draft' and docstatus=1"
 	month_to_value_dict = get_monthly_results(
 		"Sales Invoice", "base_grand_total", "posting_date", filter_str, "sum"
 	)
@@ -662,9 +758,7 @@ def update_company_monthly_sales(company):
 
 def update_transactions_annual_history(company, commit=False):
 	transactions_history = get_all_transactions_annual_history(company)
-	frappe.db.set_value(
-		"Company", company, "transactions_annual_history", json.dumps(transactions_history)
-	)
+	frappe.db.set_value("Company", company, "transactions_annual_history", json.dumps(transactions_history))
 
 	if commit:
 		frappe.db.commit()
@@ -680,21 +774,19 @@ def cache_companies_monthly_sales_history():
 
 @frappe.whitelist()
 def get_children(doctype, parent=None, company=None, is_root=False):
-	if parent == None or parent == "All Companies":
+	if parent is None or parent == "All Companies":
 		parent = ""
 
 	return frappe.db.sql(
-		"""
+		f"""
 		select
 			name as value,
 			is_group as expandable
 		from
 			`tabCompany` comp
 		where
-			ifnull(parent_company, "")={parent}
-		""".format(
-			parent=frappe.db.escape(parent)
-		),
+			ifnull(parent_company, "")={frappe.db.escape(parent)}
+		""",
 		as_dict=1,
 	)
 
@@ -770,7 +862,6 @@ def get_all_transactions_annual_history(company):
 
 def get_timeline_data(doctype, name):
 	"""returns timeline data based on linked records in dashboard"""
-	out = {}
 	date_to_value_dict = {}
 
 	history = frappe.get_cached_value("Company", name, "transactions_annual_history")
@@ -795,14 +886,13 @@ def get_default_company_address(name, sort_key="is_primary_address", existing_ad
 
 	out = frappe.db.sql(
 		""" SELECT
-			addr.name, addr.%s
+			addr.name, addr.{}
 		FROM
 			`tabAddress` addr, `tabDynamic Link` dl
 		WHERE
 			dl.parent = addr.name and dl.link_doctype = 'Company' and
-			dl.link_name = %s and ifnull(addr.disabled, 0) = 0
-		"""
-		% (sort_key, "%s"),
+			dl.link_name = {} and ifnull(addr.disabled, 0) = 0
+		""".format(sort_key, "%s"),
 		(name),
 	)  # nosec
 
@@ -818,6 +908,19 @@ def get_default_company_address(name, sort_key="is_primary_address", existing_ad
 
 @frappe.whitelist()
 def create_transaction_deletion_request(company):
+	from erpnext.setup.doctype.transaction_deletion_record.transaction_deletion_record import (
+		is_deletion_doc_running,
+	)
+
+	is_deletion_doc_running(company)
+
 	tdr = frappe.get_doc({"doctype": "Transaction Deletion Record", "company": company})
-	tdr.insert()
 	tdr.submit()
+	tdr.start_deletion_tasks()
+
+	frappe.msgprint(
+		_("A Transaction Deletion Document: {0} is triggered for {0}").format(
+			get_link_to_form("Transaction Deletion Record", tdr.name)
+		),
+		frappe.bold(company),
+	)

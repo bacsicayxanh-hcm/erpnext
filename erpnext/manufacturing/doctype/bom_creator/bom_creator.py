@@ -6,7 +6,7 @@ from collections import OrderedDict
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import flt
+from frappe.utils import cint, flt
 
 from erpnext.manufacturing.doctype.bom.bom import get_bom_item_rate
 
@@ -32,6 +32,39 @@ BOM_ITEM_FIELDS = [
 
 
 class BOMCreator(Document):
+	# begin: auto-generated types
+	# This code is auto-generated. Do not modify anything in this block.
+
+	from typing import TYPE_CHECKING
+
+	if TYPE_CHECKING:
+		from frappe.types import DF
+
+		from erpnext.manufacturing.doctype.bom_creator_item.bom_creator_item import BOMCreatorItem
+
+		amended_from: DF.Link | None
+		buying_price_list: DF.Link | None
+		company: DF.Link
+		conversion_rate: DF.Float
+		currency: DF.Link
+		default_warehouse: DF.Link | None
+		error_log: DF.Text | None
+		item_code: DF.Link
+		item_group: DF.Link | None
+		item_name: DF.Data | None
+		items: DF.Table[BOMCreatorItem]
+		plc_conversion_rate: DF.Float
+		price_list_currency: DF.Link | None
+		project: DF.Link | None
+		qty: DF.Float
+		raw_material_cost: DF.Currency
+		remarks: DF.TextEditor | None
+		rm_cost_as_per: DF.Literal["Valuation Rate", "Last Purchase Rate", "Price List"]
+		set_rate_based_on_warehouse: DF.Check
+		status: DF.Literal["Draft", "Submitted", "In Progress", "Completed", "Failed", "Cancelled"]
+		uom: DF.Link | None
+	# end: auto-generated types
+
 	def before_save(self):
 		self.set_status()
 		self.set_is_expandable()
@@ -68,9 +101,7 @@ class BOMCreator(Document):
 				has_completed = False
 				break
 
-		if not frappe.get_cached_value(
-			"BOM", {"bom_creator": self.name, "item": self.item_code}, "name"
-		):
+		if not frappe.get_cached_value("BOM", {"bom_creator": self.name, "item": self.item_code}, "name"):
 			has_completed = False
 
 		if has_completed:
@@ -91,20 +122,25 @@ class BOMCreator(Document):
 		parent_reference = {row.idx: row.name for row in self.items}
 
 		for row in self.items:
-			if row.fg_reference_id:
+			ref_id = ""
+
+			if row.parent_row_no:
+				ref_id = parent_reference.get(cint(row.parent_row_no))
+
+			# Check whether the reference id of the FG Item has correct or not
+			if row.fg_reference_id and row.fg_reference_id == ref_id:
 				continue
 
 			if row.parent_row_no:
-				row.fg_reference_id = parent_reference.get(row.parent_row_no)
+				row.fg_reference_id = ref_id
+			elif row.fg_item == self.item_code:
+				row.fg_reference_id = self.name
 
 	@frappe.whitelist()
 	def add_boms(self):
 		self.submit()
 
 	def set_rate_for_items(self):
-		if self.rm_cost_as_per == "Manual":
-			return
-
 		amount = self.get_raw_material_cost()
 		self.raw_material_cost = amount
 
@@ -196,8 +232,12 @@ class BOMCreator(Document):
 			if row.is_expandable:
 				if (row.item_code, row.name) not in production_item_wise_rm:
 					production_item_wise_rm.setdefault(
-						(row.item_code, row.name), frappe._dict({"items": [], "bom_no": "", "fg_item_data": row})
+						(row.item_code, row.name),
+						frappe._dict({"items": [], "bom_no": "", "fg_item_data": row}),
 					)
+
+			if not row.fg_reference_id and production_item_wise_rm.get((row.fg_item, row.fg_reference_id)):
+				frappe.throw(_("Please set Parent Row No for item {0}").format(row.fg_item))
 
 			production_item_wise_rm[(row.fg_item, row.fg_reference_id)]["items"].append(row)
 
@@ -210,7 +250,7 @@ class BOMCreator(Document):
 
 			frappe.msgprint(_("BOMs created successfully"))
 		except Exception:
-			traceback = frappe.get_traceback()
+			traceback = frappe.get_traceback(with_context=True)
 			self.db_set(
 				{
 					"status": "Failed",
@@ -242,7 +282,6 @@ class BOMCreator(Document):
 				"allow_alternative_item": 1,
 				"bom_creator": self.name,
 				"bom_creator_item": bom_creator_item,
-				"rm_cost_as_per": "Manual",
 			}
 		)
 
@@ -363,7 +402,6 @@ def add_sub_assembly(**kwargs):
 				"conversion_factor": 1,
 				"fg_reference_id": name,
 				"stock_qty": bom_item.qty,
-				"fg_reference_id": name,
 				"do_not_explode": 1,
 				"is_expandable": 1,
 				"stock_uom": item_info.stock_uom,

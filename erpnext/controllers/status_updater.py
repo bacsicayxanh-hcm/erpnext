@@ -54,6 +54,10 @@ status_map = {
 			"eval:self.per_delivered < 100 and self.per_billed >= 100 and self.docstatus == 1 and not self.skip_delivery_note",
 		],
 		[
+			"To Pay",
+			"eval:self.advance_payment_status == 'Requested' and self.docstatus == 1",
+		],
+		[
 			"Completed",
 			"eval:(self.per_delivered >= 100 or self.skip_delivery_note) and self.per_billed >= 100 and self.docstatus == 1",
 		],
@@ -63,14 +67,18 @@ status_map = {
 	],
 	"Purchase Order": [
 		["Draft", None],
-		[
-			"To Receive and Bill",
-			"eval:self.per_received < 100 and self.per_billed < 100 and self.docstatus == 1",
-		],
 		["To Bill", "eval:self.per_received >= 100 and self.per_billed < 100 and self.docstatus == 1"],
 		[
 			"To Receive",
 			"eval:self.per_received < 100 and self.per_billed == 100 and self.docstatus == 1",
+		],
+		[
+			"To Receive and Bill",
+			"eval:self.per_received < 100 and self.per_billed < 100 and self.docstatus == 1",
+		],
+		[
+			"To Pay",
+			"eval:self.advance_payment_status == 'Initiated' and self.docstatus == 1",
 		],
 		[
 			"Completed",
@@ -91,7 +99,8 @@ status_map = {
 	],
 	"Purchase Receipt": [
 		["Draft", None],
-		["To Bill", "eval:self.per_billed < 100 and self.docstatus == 1"],
+		["To Bill", "eval:self.per_billed == 0 and self.docstatus == 1"],
+		["Partly Billed", "eval:self.per_billed > 0 and self.per_billed < 100 and self.docstatus == 1"],
 		["Return Issued", "eval:self.per_returned == 100 and self.docstatus == 1"],
 		["Completed", "eval:self.per_billed == 100 and self.docstatus == 1"],
 		["Cancelled", "eval:self.docstatus==2"],
@@ -130,11 +139,6 @@ status_map = {
 			"Manufactured",
 			"eval:self.status != 'Stopped' and self.per_ordered == 100 and self.docstatus == 1 and self.material_request_type == 'Manufacture'",
 		],
-	],
-	"Bank Transaction": [
-		["Unreconciled", "eval:self.docstatus == 1 and self.unallocated_amount>0"],
-		["Reconciled", "eval:self.docstatus == 1 and self.unallocated_amount<=0"],
-		["Cancelled", "eval:self.docstatus == 2"],
 	],
 	"POS Opening Entry": [
 		["Draft", None],
@@ -253,9 +257,7 @@ class StatusUpdater(Document):
 						"""select item_code, `{target_ref_field}`,
 						`{target_field}`, parenttype, parent from `tab{target_dt}`
 						where `{target_ref_field}` < `{target_field}`
-						and name=%s and docstatus=1""".format(
-							**args
-						),
+						and name=%s and docstatus=1""".format(**args),
 						args["name"],
 						as_dict=1,
 					)
@@ -300,9 +302,7 @@ class StatusUpdater(Document):
 		role_allowed_to_over_bill = frappe.db.get_single_value(
 			"Accounts Settings", "role_allowed_to_over_bill"
 		)
-		role = (
-			role_allowed_to_over_deliver_receive if qty_or_amount == "qty" else role_allowed_to_over_bill
-		)
+		role = role_allowed_to_over_deliver_receive if qty_or_amount == "qty" else role_allowed_to_over_bill
 
 		overflow_percent = (
 			(item[args["target_field"]] - item[args["target_ref_field"]]) / item[args["target_ref_field"]]
@@ -413,12 +413,11 @@ class StatusUpdater(Document):
 					args["second_source_extra_cond"] = ""
 
 				args["second_source_condition"] = frappe.db.sql(
-					""" select ifnull((select sum(%(second_source_field)s)
-					from `tab%(second_source_dt)s`
-					where `%(second_join_field)s`='%(detail_id)s'
-					and (`tab%(second_source_dt)s`.docstatus=1)
-					%(second_source_extra_cond)s), 0) """
-					% args
+					""" select ifnull((select sum({second_source_field})
+					from `tab{second_source_dt}`
+					where `{second_join_field}`='{detail_id}'
+					and (`tab{second_source_dt}`.docstatus=1)
+					{second_source_extra_cond}), 0) """.format(**args)
 				)[0][0]
 
 			if args["detail_id"]:
@@ -428,11 +427,10 @@ class StatusUpdater(Document):
 				args["source_dt_value"] = (
 					frappe.db.sql(
 						"""
-						(select ifnull(sum(%(source_field)s), 0)
-							from `tab%(source_dt)s` where `%(join_field)s`='%(detail_id)s'
-							and (docstatus=1 %(cond)s) %(extra_cond)s)
-				"""
-						% args
+						(select ifnull(sum({source_field}), 0)
+							from `tab{source_dt}` where `{join_field}`='{detail_id}'
+							and (docstatus=1 {cond}) {extra_cond})
+				""".format(**args)
 					)[0][0]
 					or 0.0
 				)
@@ -441,10 +439,9 @@ class StatusUpdater(Document):
 					args["source_dt_value"] += flt(args["second_source_condition"])
 
 				frappe.db.sql(
-					"""update `tab%(target_dt)s`
-					set %(target_field)s = %(source_dt_value)s %(update_modified)s
-					where name='%(detail_id)s'"""
-					% args
+					"""update `tab{target_dt}`
+					set {target_field} = {source_dt_value} {update_modified}
+					where name='{detail_id}'""".format(**args)
 				)
 
 	def _update_percent_field_in_targets(self, args, update_modified=True):
@@ -471,26 +468,24 @@ class StatusUpdater(Document):
 
 		if args.get("target_parent_field"):
 			frappe.db.sql(
-				"""update `tab%(target_parent_dt)s`
-				set %(target_parent_field)s = round(
+				"""update `tab{target_parent_dt}`
+				set {target_parent_field} = round(
 					ifnull((select
-						ifnull(sum(case when abs(%(target_ref_field)s) > abs(%(target_field)s) then abs(%(target_field)s) else abs(%(target_ref_field)s) end), 0)
-						/ sum(abs(%(target_ref_field)s)) * 100
-					from `tab%(target_dt)s` where parent='%(name)s' and parenttype='%(target_parent_dt)s' having sum(abs(%(target_ref_field)s)) > 0), 0), 6)
-					%(update_modified)s
-				where name='%(name)s'"""
-				% args
+						ifnull(sum(case when abs({target_ref_field}) > abs({target_field}) then abs({target_field}) else abs({target_ref_field}) end), 0)
+						/ sum(abs({target_ref_field})) * 100
+					from `tab{target_dt}` where parent='{name}' and parenttype='{target_parent_dt}' having sum(abs({target_ref_field})) > 0), 0), 6)
+					{update_modified}
+				where name='{name}'""".format(**args)
 			)
 
 			# update field
 			if args.get("status_field"):
 				frappe.db.sql(
-					"""update `tab%(target_parent_dt)s`
-					set %(status_field)s = (case when %(target_parent_field)s<0.001 then 'Not %(keyword)s'
-					else case when %(target_parent_field)s>=99.999999 then 'Fully %(keyword)s'
-					else 'Partly %(keyword)s' end end)
-					where name='%(name)s'"""
-					% args
+					"""update `tab{target_parent_dt}`
+					set {status_field} = (case when {target_parent_field}<0.001 then 'Not {keyword}'
+					else case when {target_parent_field}>=99.999999 then 'Fully {keyword}'
+					else 'Partly {keyword}' end end)
+					where name='{name}'""".format(**args)
 				)
 
 			if update_modified:
@@ -503,21 +498,19 @@ class StatusUpdater(Document):
 			args["update_modified"] = ""
 			return
 
-		args["update_modified"] = ", modified = {0}, modified_by = {1}".format(
+		args["update_modified"] = ", modified = {}, modified_by = {}".format(
 			frappe.db.escape(now()), frappe.db.escape(frappe.session.user)
 		)
 
 	def update_billing_status_for_zero_amount_refdoc(self, ref_dt):
 		ref_fieldname = frappe.scrub(ref_dt)
 
-		ref_docs = [
-			item.get(ref_fieldname) for item in (self.get("items") or []) if item.get(ref_fieldname)
-		]
+		ref_docs = [item.get(ref_fieldname) for item in (self.get("items") or []) if item.get(ref_fieldname)]
 		if not ref_docs:
 			return
 
 		zero_amount_refdocs = frappe.db.sql_list(
-			"""
+			f"""
 			SELECT
 				name
 			from
@@ -526,9 +519,7 @@ class StatusUpdater(Document):
 				docstatus = 1
 				and base_net_total = 0
 				and name in %(ref_docs)s
-		""".format(
-				ref_dt=ref_dt
-			),
+		""",
 			{"ref_docs": ref_docs},
 		)
 
@@ -539,9 +530,8 @@ class StatusUpdater(Document):
 		for ref_dn in zero_amount_refdoc:
 			ref_doc_qty = flt(
 				frappe.db.sql(
-					"""select ifnull(sum(qty), 0) from `tab%s Item`
-				where parent=%s"""
-					% (ref_dt, "%s"),
+					"""select ifnull(sum(qty), 0) from `tab{} Item`
+				where parent={}""".format(ref_dt, "%s"),
 					(ref_dn),
 				)[0][0]
 			)
@@ -549,8 +539,7 @@ class StatusUpdater(Document):
 			billed_qty = flt(
 				frappe.db.sql(
 					"""select ifnull(sum(qty), 0)
-				from `tab%s Item` where %s=%s and docstatus=1"""
-					% (self.doctype, ref_fieldname, "%s"),
+				from `tab{} Item` where {}={} and docstatus=1""".format(self.doctype, ref_fieldname, "%s"),
 					(ref_dn),
 				)[0][0]
 			)
@@ -573,6 +562,7 @@ class StatusUpdater(Document):
 			ref_doc.set_status(update=True)
 
 
+@frappe.request_cache
 def get_allowance_for(
 	item_code,
 	item_allowance=None,
@@ -602,20 +592,20 @@ def get_allowance_for(
 				global_amount_allowance,
 			)
 
-	qty_allowance, over_billing_allowance = frappe.db.get_value(
+	qty_allowance, over_billing_allowance = frappe.get_cached_value(
 		"Item", item_code, ["over_delivery_receipt_allowance", "over_billing_allowance"]
 	)
 
 	if qty_or_amount == "qty" and not qty_allowance:
-		if global_qty_allowance == None:
+		if global_qty_allowance is None:
 			global_qty_allowance = flt(
-				frappe.db.get_single_value("Stock Settings", "over_delivery_receipt_allowance")
+				frappe.get_cached_value("Stock Settings", None, "over_delivery_receipt_allowance")
 			)
 		qty_allowance = global_qty_allowance
 	elif qty_or_amount == "amount" and not over_billing_allowance:
-		if global_amount_allowance == None:
+		if global_amount_allowance is None:
 			global_amount_allowance = flt(
-				frappe.db.get_single_value("Accounts Settings", "over_billing_allowance")
+				frappe.get_cached_value("Accounts Settings", None, "over_billing_allowance")
 			)
 		over_billing_allowance = global_amount_allowance
 

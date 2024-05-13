@@ -10,6 +10,25 @@ from frappe.utils import add_days, add_years, cstr, getdate
 
 
 class FiscalYear(Document):
+	# begin: auto-generated types
+	# This code is auto-generated. Do not modify anything in this block.
+
+	from typing import TYPE_CHECKING
+
+	if TYPE_CHECKING:
+		from frappe.types import DF
+
+		from erpnext.accounts.doctype.fiscal_year_company.fiscal_year_company import FiscalYearCompany
+
+		auto_created: DF.Check
+		companies: DF.Table[FiscalYearCompany]
+		disabled: DF.Check
+		is_short_year: DF.Check
+		year: DF.Data
+		year_end_date: DF.Date
+		year_start_date: DF.Date
+	# end: auto-generated types
+
 	def validate(self):
 		self.validate_dates()
 		self.validate_overlap()
@@ -89,9 +108,9 @@ class FiscalYear(Document):
 
 				if overlap:
 					frappe.throw(
-						_("Year start date or end date is overlapping with {0}. To avoid please set company").format(
-							existing.name
-						),
+						_(
+							"Year start date or end date is overlapping with {0}. To avoid please set company"
+						).format(existing.name),
 						frappe.NameError,
 					)
 
@@ -107,9 +126,9 @@ def check_duplicate_fiscal_year(doc):
 			not frappe.flags.in_test
 		):
 			frappe.throw(
-				_("Fiscal Year Start Date and Fiscal Year End Date are already set in Fiscal Year {0}").format(
-					fiscal_year
-				)
+				_(
+					"Fiscal Year Start Date and Fiscal Year End Date are already set in Fiscal Year {0}"
+				).format(fiscal_year)
 			)
 
 

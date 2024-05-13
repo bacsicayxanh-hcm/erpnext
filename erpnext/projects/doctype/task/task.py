@@ -18,6 +18,56 @@ class CircularReferenceError(frappe.ValidationError):
 
 
 class Task(NestedSet):
+	# begin: auto-generated types
+	# This code is auto-generated. Do not modify anything in this block.
+
+	from typing import TYPE_CHECKING
+
+	if TYPE_CHECKING:
+		from frappe.types import DF
+
+		from erpnext.projects.doctype.task_depends_on.task_depends_on import TaskDependsOn
+
+		act_end_date: DF.Date | None
+		act_start_date: DF.Date | None
+		actual_time: DF.Float
+		closing_date: DF.Date | None
+		color: DF.Color | None
+		company: DF.Link | None
+		completed_by: DF.Link | None
+		completed_on: DF.Date | None
+		department: DF.Link | None
+		depends_on: DF.Table[TaskDependsOn]
+		depends_on_tasks: DF.Code | None
+		description: DF.TextEditor | None
+		duration: DF.Int
+		exp_end_date: DF.Date | None
+		exp_start_date: DF.Date | None
+		expected_time: DF.Float
+		is_group: DF.Check
+		is_milestone: DF.Check
+		is_template: DF.Check
+		issue: DF.Link | None
+		lft: DF.Int
+		old_parent: DF.Data | None
+		parent_task: DF.Link | None
+		priority: DF.Literal["Low", "Medium", "High", "Urgent"]
+		progress: DF.Percent
+		project: DF.Link | None
+		review_date: DF.Date | None
+		rgt: DF.Int
+		start: DF.Int
+		status: DF.Literal[
+			"Open", "Working", "Pending Review", "Overdue", "Template", "Completed", "Cancelled"
+		]
+		subject: DF.Data
+		task_weight: DF.Float
+		template_task: DF.Data | None
+		total_billing_amount: DF.Currency
+		total_costing_amount: DF.Currency
+		type: DF.Link | None
+	# end: auto-generated types
+
 	nsm_parent_field = "parent_task"
 
 	def get_customer_details(self):
@@ -103,14 +153,14 @@ class Task(NestedSet):
 	def validate_parent_template_task(self):
 		if self.parent_task:
 			if not frappe.db.get_value("Task", self.parent_task, "is_template"):
-				parent_task_format = """<a href="#Form/Task/{0}">{0}</a>""".format(self.parent_task)
+				parent_task_format = f"""<a href="#Form/Task/{self.parent_task}">{self.parent_task}</a>"""
 				frappe.throw(_("Parent Task {0} is not a Template Task").format(parent_task_format))
 
 	def validate_depends_on_tasks(self):
 		if self.depends_on:
 			for task in self.depends_on:
 				if not frappe.db.get_value("Task", task.task, "is_template"):
-					dependent_task_format = """<a href="#Form/Task/{0}">{0}</a>""".format(task.task)
+					dependent_task_format = f"""<a href="#Form/Task/{task.task}">{task.task}</a>"""
 					frappe.throw(_("Dependent Task {0} is not a Template Task").format(dependent_task_format))
 
 	def validate_completed_on(self):
@@ -169,7 +219,7 @@ class Task(NestedSet):
 			task_list, count = [self.name], 0
 			while len(task_list) > count:
 				tasks = frappe.db.sql(
-					" select %s from `tabTask Depends On` where %s = %s " % (d[0], d[1], "%s"),
+					" select {} from `tabTask Depends On` where {} = {} ".format(d[0], d[1], "%s"),
 					cstr(task_list[count]),
 				)
 				count = count + 1
@@ -261,14 +311,12 @@ def get_project(doctype, txt, searchfield, start, page_len, filters):
 	search_cond = " or " + " or ".join(field + " like %(txt)s" for field in searchfields)
 
 	return frappe.db.sql(
-		""" select name {search_columns} from `tabProject`
+		f""" select name {search_columns} from `tabProject`
 		where %(key)s like %(txt)s
 			%(mcond)s
-			{search_condition}
+			{search_cond}
 		order by name
-		limit %(page_len)s offset %(start)s""".format(
-			search_columns=search_columns, search_condition=search_cond
-		),
+		limit %(page_len)s offset %(start)s""",
 		{
 			"key": searchfield,
 			"txt": "%" + txt + "%",
@@ -329,7 +377,6 @@ def make_timesheet(source_name, target_doc=None, ignore_permissions=False):
 
 @frappe.whitelist()
 def get_children(doctype, parent, task=None, project=None, is_root=False):
-
 	filters = [["docstatus", "<", "2"]]
 
 	if task:

@@ -251,7 +251,7 @@
    "label": "Lead Type",
    "oldfieldname": "type",
    "oldfieldtype": "Select",
-   "options": "\nClient\nAgency"
+   "options": "\nClient\nChannel Partner\nConsultant"
   },
   {
    "fieldname": "market_segment",
@@ -562,7 +562,7 @@
  "idx": 5,
  "image_field": "image",
  "links": [],
- "modified": "2024-03-14 17:34:36.688522",
+ "modified": "2024-03-27 13:09:59.818450",
  "modified_by": "Administrator",
  "module": "CRM",
  "name": "Lead",
@@ -623,8 +623,9 @@
  ],
  "search_fields": "lead_name,lead_owner,status",
  "sender_field": "email_id",
+ "sender_name_field": "lead_name",
  "show_name_in_global_search": 1,
- "sort_field": "modified",
+ "sort_field": "creation",
  "sort_order": "DESC",
  "states": [],
  "subject_field": "title",

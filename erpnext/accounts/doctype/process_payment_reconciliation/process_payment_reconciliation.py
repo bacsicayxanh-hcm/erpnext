@@ -9,6 +9,31 @@ from frappe.utils.scheduler import is_scheduler_inactive
 
 
 class ProcessPaymentReconciliation(Document):
+	# begin: auto-generated types
+	# This code is auto-generated. Do not modify anything in this block.
+
+	from typing import TYPE_CHECKING
+
+	if TYPE_CHECKING:
+		from frappe.types import DF
+
+		amended_from: DF.Link | None
+		bank_cash_account: DF.Link | None
+		company: DF.Link
+		cost_center: DF.Link | None
+		error_log: DF.LongText | None
+		from_invoice_date: DF.Date | None
+		from_payment_date: DF.Date | None
+		party: DF.DynamicLink
+		party_type: DF.Link
+		receivable_payable_account: DF.Link
+		status: DF.Literal[
+			"", "Queued", "Running", "Paused", "Completed", "Partially Reconciled", "Failed", "Cancelled"
+		]
+		to_invoice_date: DF.Date | None
+		to_payment_date: DF.Date | None
+	# end: auto-generated types
+
 	def validate(self):
 		self.validate_receivable_payable_account()
 		self.validate_bank_cash_account()
@@ -41,9 +66,7 @@ class ProcessPaymentReconciliation(Document):
 
 	def on_cancel(self):
 		self.db_set("status", "Cancelled")
-		log = frappe.db.get_value(
-			"Process Payment Reconciliation Log", filters={"process_pr": self.name}
-		)
+		log = frappe.db.get_value("Process Payment Reconciliation Log", filters={"process_pr": self.name})
 		if log:
 			frappe.db.set_value("Process Payment Reconciliation Log", log, "status", "Cancelled")
 
@@ -391,7 +414,6 @@ def reconcile(doc: None | str = None) -> None:
 					# If Payment Entry, update details only for newly linked references
 					# This is for performance
 					if allocations[0].reference_type == "Payment Entry":
-
 						references = [(x.invoice_type, x.invoice_number) for x in allocations]
 						pe = frappe.get_doc(allocations[0].reference_type, allocations[0].reference_name)
 						pe.flags.ignore_validate_update_after_submit = True
@@ -405,17 +427,18 @@ def reconcile(doc: None | str = None) -> None:
 
 					# Update reconciled count
 					reconciled_count = frappe.db.count(
-						"Process Payment Reconciliation Log Allocations", filters={"parent": log, "reconciled": True}
+						"Process Payment Reconciliation Log Allocations",
+						filters={"parent": log, "reconciled": True},
 					)
 					frappe.db.set_value(
 						"Process Payment Reconciliation Log", log, "reconciled_entries", reconciled_count
 					)
 
-				except Exception as err:
+				except Exception:
 					# Update the parent doc about the exception
 					frappe.db.rollback()
 
-					traceback = frappe.get_traceback()
+					traceback = frappe.get_traceback(with_context=True)
 					if traceback:
 						message = "Traceback: <br>" + traceback
 						frappe.db.set_value("Process Payment Reconciliation Log", log, "error_log", message)
@@ -449,15 +472,12 @@ def reconcile(doc: None | str = None) -> None:
 						frappe.db.set_value("Process Payment Reconciliation Log", log, "reconciled", True)
 						frappe.db.set_value("Process Payment Reconciliation", doc, "status", "Completed")
 					else:
-
-						if not (frappe.db.get_value("Process Payment Reconciliation", doc, "status") == "Paused"):
+						if frappe.db.get_value("Process Payment Reconciliation", doc, "status") != "Paused":
 							# trigger next batch in job
 							# generate reconcile job name
 							allocation = get_next_allocation(log)
 							if allocation:
-								reconcile_job_name = (
-									f"process_{doc}_reconcile_allocation_{allocation[0].idx}_{allocation[-1].idx}"
-								)
+								reconcile_job_name = f"process_{doc}_reconcile_allocation_{allocation[0].idx}_{allocation[-1].idx}"
 							else:
 								reconcile_job_name = f"process_{doc}_reconcile"
 
@@ -481,7 +501,7 @@ def reconcile(doc: None | str = None) -> None:
 def is_any_doc_running(for_filter: str | dict | None = None) -> str | None:
 	running_doc = None
 	if for_filter:
-		if type(for_filter) == str:
+		if isinstance(for_filter, str):
 			for_filter = frappe.json.loads(for_filter)
 
 		running_doc = frappe.db.get_value(

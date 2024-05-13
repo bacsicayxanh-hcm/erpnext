@@ -56,10 +56,26 @@ def make_variant_based_on_manufacturer(template, manufacturer, manufacturer_part
 
 	copy_attributes_to_variant(template, variant)
 
-	variant.manufacturer = manufacturer
-	variant.manufacturer_part_no = manufacturer_part_no
+	variant_name = f"{template.name} - {manufacturer}"
+	if manufacturer_part_no:
+		variant_name += f" - {manufacturer_part_no}"
 
-	variant.item_code = append_number_if_name_exists("Item", template.name)
+	variant.item_code = append_number_if_name_exists("Item", variant_name)
+	variant.flags.ignore_mandatory = True
+	variant.save()
+
+	if not frappe.db.exists("Item Manufacturer", {"item_code": variant.name, "manufacturer": manufacturer}):
+		manufacturer_doc = frappe.new_doc("Item Manufacturer")
+		manufacturer_doc.update(
+			{
+				"item_code": variant.name,
+				"manufacturer": manufacturer,
+				"manufacturer_part_no": manufacturer_part_no,
+			}
+		)
+
+		manufacturer_doc.flags.ignore_mandatory = True
+		manufacturer_doc.save(ignore_permissions=True)
 
 	return variant
 
@@ -112,9 +128,7 @@ def validate_is_incremental(numeric_attribute, attribute, value, item):
 		)
 
 
-def validate_item_attribute_value(
-	attributes_list, attribute, attribute_value, item, from_variant=True
-):
+def validate_item_attribute_value(attributes_list, attribute, attribute_value, item, from_variant=True):
 	allow_rename_attribute_value = frappe.db.get_single_value(
 		"Item Variant Settings", "allow_rename_attribute_value"
 	)
@@ -161,9 +175,7 @@ def get_attribute_values(item):
 
 
 def find_variant(template, args, variant_item_code=None):
-	possible_variants = [
-		i for i in get_item_codes_by_attributes(args, template) if i != variant_item_code
-	]
+	possible_variants = [i for i in get_item_codes_by_attributes(args, template) if i != variant_item_code]
 
 	for variant in possible_variants:
 		variant = frappe.get_doc("Item", variant)
@@ -339,7 +351,9 @@ def copy_attributes_to_variant(item, variant):
 			if variant.attributes:
 				attributes_description = item.description + " "
 				for d in variant.attributes:
-					attributes_description += "<div>" + d.attribute + ": " + cstr(d.attribute_value) + "</div>"
+					attributes_description += (
+						"<div>" + d.attribute + ": " + cstr(d.attribute_value) + "</div>"
+					)
 
 				if attributes_description not in variant.description:
 					variant.description = attributes_description
@@ -373,8 +387,8 @@ def make_variant_item_code(template_item_code, template_item_name, variant):
 		abbreviations.append(abbr_or_value)
 
 	if abbreviations:
-		variant.item_code = "{0}-{1}".format(template_item_code, "-".join(abbreviations))
-		variant.item_name = "{0}-{1}".format(template_item_name, "-".join(abbreviations))
+		variant.item_code = "{}-{}".format(template_item_code, "-".join(abbreviations))
+		variant.item_name = "{}-{}".format(template_item_name, "-".join(abbreviations))
 
 
 @frappe.whitelist()

@@ -14,6 +14,43 @@ from erpnext.controllers.status_updater import StatusUpdater
 
 
 class POSClosingEntry(StatusUpdater):
+	# begin: auto-generated types
+	# This code is auto-generated. Do not modify anything in this block.
+
+	from typing import TYPE_CHECKING
+
+	if TYPE_CHECKING:
+		from frappe.types import DF
+
+		from erpnext.accounts.doctype.pos_closing_entry_detail.pos_closing_entry_detail import (
+			POSClosingEntryDetail,
+		)
+		from erpnext.accounts.doctype.pos_closing_entry_taxes.pos_closing_entry_taxes import (
+			POSClosingEntryTaxes,
+		)
+		from erpnext.accounts.doctype.pos_invoice_reference.pos_invoice_reference import (
+			POSInvoiceReference,
+		)
+
+		amended_from: DF.Link | None
+		company: DF.Link
+		error_message: DF.SmallText | None
+		grand_total: DF.Currency
+		net_total: DF.Currency
+		payment_reconciliation: DF.Table[POSClosingEntryDetail]
+		period_end_date: DF.Datetime
+		period_start_date: DF.Datetime
+		pos_opening_entry: DF.Link
+		pos_profile: DF.Link
+		pos_transactions: DF.Table[POSInvoiceReference]
+		posting_date: DF.Date
+		posting_time: DF.Time
+		status: DF.Literal["Draft", "Submitted", "Queued", "Failed", "Cancelled"]
+		taxes: DF.Table[POSClosingEntryTaxes]
+		total_quantity: DF.Float
+		user: DF.Link
+	# end: auto-generated types
+
 	def validate(self):
 		self.posting_date = self.posting_date or frappe.utils.nowdate()
 		self.posting_time = self.posting_time or frappe.utils.nowtime()
@@ -33,7 +70,7 @@ class POSClosingEntry(StatusUpdater):
 		for key, value in pos_occurences.items():
 			if len(value) > 1:
 				error_list.append(
-					_("{} is added multiple times on rows: {}".format(frappe.bold(key), frappe.bold(value)))
+					_(f"{frappe.bold(key)} is added multiple times on rows: {frappe.bold(value)}")
 				)
 
 		if error_list:
@@ -128,9 +165,7 @@ def get_pos_invoices(start, end, pos_profile, user):
 		as_dict=1,
 	)
 
-	data = list(
-		filter(lambda d: get_datetime(start) <= get_datetime(d.timestamp) <= get_datetime(end), data)
-	)
+	data = list(filter(lambda d: get_datetime(start) <= get_datetime(d.timestamp) <= get_datetime(end), data))
 	# need to get taxes and payments so can't avoid get_doc
 	data = [frappe.get_doc("POS Invoice", d.name).as_dict() for d in data]
 
@@ -201,7 +236,11 @@ def make_closing_entry_from_opening(opening_entry):
 			else:
 				payments.append(
 					frappe._dict(
-						{"mode_of_payment": p.mode_of_payment, "opening_amount": 0, "expected_amount": p.amount}
+						{
+							"mode_of_payment": p.mode_of_payment,
+							"opening_amount": 0,
+							"expected_amount": p.amount,
+						}
 					)
 				)
 

@@ -9,6 +9,33 @@ from frappe.utils import flt, today
 
 
 class LoyaltyProgram(Document):
+	# begin: auto-generated types
+	# This code is auto-generated. Do not modify anything in this block.
+
+	from typing import TYPE_CHECKING
+
+	if TYPE_CHECKING:
+		from frappe.types import DF
+
+		from erpnext.accounts.doctype.loyalty_program_collection.loyalty_program_collection import (
+			LoyaltyProgramCollection,
+		)
+
+		auto_opt_in: DF.Check
+		collection_rules: DF.Table[LoyaltyProgramCollection]
+		company: DF.Link | None
+		conversion_factor: DF.Float
+		cost_center: DF.Link | None
+		customer_group: DF.Link | None
+		customer_territory: DF.Link | None
+		expense_account: DF.Link | None
+		expiry_duration: DF.Int
+		from_date: DF.Date
+		loyalty_program_name: DF.Data
+		loyalty_program_type: DF.Literal["Single Tier Program", "Multiple Tier Program"]
+		to_date: DF.Date | None
+	# end: auto-generated types
+
 	pass
 
 
@@ -25,13 +52,11 @@ def get_loyalty_details(
 		condition += " and expiry_date>='%s' " % expiry_date
 
 	loyalty_point_details = frappe.db.sql(
-		"""select sum(loyalty_points) as loyalty_points,
+		f"""select sum(loyalty_points) as loyalty_points,
 		sum(purchase_amount) as total_spent from `tabLoyalty Point Entry`
 		where customer=%s and loyalty_program=%s and posting_date <= %s
 		{condition}
-		group by customer""".format(
-			condition=condition
-		),
+		group by customer""",
 		(customer, loyalty_program, expiry_date),
 		as_dict=1,
 	)
@@ -52,9 +77,7 @@ def get_loyalty_program_details_with_points(
 	include_expired_entry=False,
 	current_transaction_amount=0,
 ):
-	lp_details = get_loyalty_program_details(
-		customer, loyalty_program, company=company, silent=silent
-	)
+	lp_details = get_loyalty_program_details(customer, loyalty_program, company=company, silent=silent)
 	loyalty_program = frappe.get_doc("Loyalty Program", loyalty_program)
 	lp_details.update(
 		get_loyalty_details(customer, loyalty_program.name, expiry_date, company, include_expired_entry)

@@ -16,6 +16,34 @@ ONGOING_CALL_STATUSES = ["Ringing", "In Progress"]
 
 
 class CallLog(Document):
+	# begin: auto-generated types
+	# This code is auto-generated. Do not modify anything in this block.
+
+	from typing import TYPE_CHECKING
+
+	if TYPE_CHECKING:
+		from frappe.core.doctype.dynamic_link.dynamic_link import DynamicLink
+		from frappe.types import DF
+
+		call_received_by: DF.Link | None
+		customer: DF.Link | None
+		duration: DF.Duration | None
+		employee_user_id: DF.Link | None
+		end_time: DF.Datetime | None
+		id: DF.Data | None
+		links: DF.Table[DynamicLink]
+		medium: DF.Data | None
+		recording_url: DF.Data | None
+		start_time: DF.Datetime | None
+		status: DF.Literal[
+			"Ringing", "In Progress", "Completed", "Failed", "Busy", "No Answer", "Queued", "Canceled"
+		]
+		summary: DF.SmallText | None
+		to: DF.Data | None
+		type: DF.Literal["Incoming", "Outgoing"]
+		type_of_call: DF.Link | None
+	# end: auto-generated types
+
 	def validate(self):
 		deduplicate_dynamic_links(self)
 
@@ -40,9 +68,7 @@ class CallLog(Document):
 	def on_update(self):
 		def _is_call_missed(doc_before_save, doc_after_save):
 			# FIXME: This works for Exotel but not for all telepony providers
-			return (
-				doc_before_save.to != doc_after_save.to and doc_after_save.status not in END_CALL_STATUSES
-			)
+			return doc_before_save.to != doc_after_save.to and doc_after_save.status not in END_CALL_STATUSES
 
 		def _is_call_ended(doc_before_save, doc_after_save):
 			return doc_before_save.status not in END_CALL_STATUSES and self.status in END_CALL_STATUSES
@@ -55,11 +81,11 @@ class CallLog(Document):
 			self.update_received_by()
 
 		if _is_call_missed(doc_before_save, self):
-			frappe.publish_realtime("call_{id}_missed".format(id=self.id), self)
+			frappe.publish_realtime(f"call_{self.id}_missed", self)
 			self.trigger_call_popup()
 
 		if _is_call_ended(doc_before_save, self):
-			frappe.publish_realtime("call_{id}_ended".format(id=self.id), self)
+			frappe.publish_realtime(f"call_{self.id}_ended", self)
 
 	def is_incoming_call(self):
 		return self.type == "Incoming"

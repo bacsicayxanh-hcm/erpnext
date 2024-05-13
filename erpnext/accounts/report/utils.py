@@ -78,10 +78,10 @@ def get_rate_as_at(date, from_currency, to_currency):
 	:return: Retrieved exchange rate
 	"""
 
-	rate = __exchange_rates.get("{0}-{1}@{2}".format(from_currency, to_currency, date))
+	rate = __exchange_rates.get(f"{from_currency}-{to_currency}@{date}")
 	if not rate:
 		rate = get_exchange_rate(from_currency, to_currency, date) or 1
-		__exchange_rates["{0}-{1}@{2}".format(from_currency, to_currency, date)] = rate
+		__exchange_rates[f"{from_currency}-{to_currency}@{date}"] = rate
 
 	return rate
 
@@ -136,9 +136,7 @@ def get_appropriate_company(filters):
 
 
 @frappe.whitelist()
-def get_invoiced_item_gross_margin(
-	sales_invoice=None, item_code=None, company=None, with_item_data=False
-):
+def get_invoiced_item_gross_margin(sales_invoice=None, item_code=None, company=None, with_item_data=False):
 	from erpnext.accounts.report.gross_profit.gross_profit import GrossProfitGenerator
 
 	sales_invoice = sales_invoice or frappe.form_dict.get("sales_invoice")
@@ -251,6 +249,7 @@ def get_journal_entries(filters, args):
 		)
 		.where(
 			(je.voucher_type == "Journal Entry")
+			& (je.docstatus == 1)
 			& (journal_account.party == filters.get(args.party))
 			& (journal_account.account.isin(args.party_account))
 		)
@@ -281,7 +280,9 @@ def get_payment_entries(filters, args):
 			pe.cost_center,
 		)
 		.where(
-			(pe.party == filters.get(args.party)) & (pe[args.account_fieldname].isin(args.party_account))
+			(pe.docstatus == 1)
+			& (pe.party == filters.get(args.party))
+			& (pe[args.account_fieldname].isin(args.party_account))
 		)
 		.orderby(pe.posting_date, pe.name, order=Order.desc)
 	)
@@ -365,7 +366,7 @@ def filter_invoices_based_on_dimensions(filters, query, parent_doc):
 						dimension.document_type, filters.get(dimension.fieldname)
 					)
 				fieldname = dimension.fieldname
-				query = query.where(parent_doc[fieldname] == filters.fieldname)
+				query = query.where(parent_doc[fieldname].isin(filters[fieldname]))
 	return query
 
 

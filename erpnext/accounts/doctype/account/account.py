@@ -23,18 +23,75 @@ class InvalidAccountMergeError(frappe.ValidationError):
 
 
 class Account(NestedSet):
+	# begin: auto-generated types
+	# This code is auto-generated. Do not modify anything in this block.
+
+	from typing import TYPE_CHECKING
+
+	if TYPE_CHECKING:
+		from frappe.types import DF
+
+		account_currency: DF.Link | None
+		account_name: DF.Data
+		account_number: DF.Data | None
+		account_type: DF.Literal[
+			"",
+			"Accumulated Depreciation",
+			"Asset Received But Not Billed",
+			"Bank",
+			"Cash",
+			"Chargeable",
+			"Capital Work in Progress",
+			"Cost of Goods Sold",
+			"Current Asset",
+			"Current Liability",
+			"Depreciation",
+			"Direct Expense",
+			"Direct Income",
+			"Equity",
+			"Expense Account",
+			"Expenses Included In Asset Valuation",
+			"Expenses Included In Valuation",
+			"Fixed Asset",
+			"Income Account",
+			"Indirect Expense",
+			"Indirect Income",
+			"Liability",
+			"Payable",
+			"Receivable",
+			"Round Off",
+			"Stock",
+			"Stock Adjustment",
+			"Stock Received But Not Billed",
+			"Service Received But Not Billed",
+			"Tax",
+			"Temporary",
+		]
+		balance_must_be: DF.Literal["", "Debit", "Credit"]
+		company: DF.Link
+		disabled: DF.Check
+		freeze_account: DF.Literal["No", "Yes"]
+		include_in_gross: DF.Check
+		is_group: DF.Check
+		lft: DF.Int
+		old_parent: DF.Data | None
+		parent_account: DF.Link
+		report_type: DF.Literal["", "Balance Sheet", "Profit and Loss"]
+		rgt: DF.Int
+		root_type: DF.Literal["", "Asset", "Liability", "Income", "Expense", "Equity"]
+		tax_rate: DF.Float
+	# end: auto-generated types
+
 	nsm_parent_field = "parent_account"
 
 	def on_update(self):
 		if frappe.local.flags.ignore_update_nsm:
 			return
 		else:
-			super(Account, self).on_update()
+			super().on_update()
 
 	def onload(self):
-		frozen_accounts_modifier = frappe.db.get_value(
-			"Accounts Settings", "Accounts Settings", "frozen_accounts_modifier"
-		)
+		frozen_accounts_modifier = frappe.db.get_single_value("Accounts Settings", "frozen_accounts_modifier")
 		if not frozen_accounts_modifier or frozen_accounts_modifier in frappe.get_roles():
 			self.set_onload("can_freeze_account", True)
 
@@ -59,6 +116,7 @@ class Account(NestedSet):
 		self.validate_balance_must_be_debit_or_credit()
 		self.validate_account_currency()
 		self.validate_root_company_and_sync_account_to_children()
+		self.validate_receivable_payable_account_type()
 
 	def validate_parent_child_account_type(self):
 		if self.parent_account:
@@ -129,6 +187,24 @@ class Account(NestedSet):
 				"Balance Sheet" if self.root_type in ("Asset", "Liability", "Equity") else "Profit and Loss"
 			)
 
+	def validate_receivable_payable_account_type(self):
+		doc_before_save = self.get_doc_before_save()
+		receivable_payable_types = ["Receivable", "Payable"]
+		if (
+			doc_before_save
+			and doc_before_save.account_type in receivable_payable_types
+			and doc_before_save.account_type != self.account_type
+		):
+			# check for ledger entries
+			if frappe.db.get_all("GL Entry", filters={"account": self.name, "is_cancelled": 0}, limit=1):
+				msg = _(
+					"There are ledger entries against this account. Changing {0} to non-{1} in live system will cause incorrect output in 'Accounts {2}' report"
+				).format(
+					frappe.bold("Account Type"), doc_before_save.account_type, doc_before_save.account_type
+				)
+				frappe.msgprint(msg)
+				self.add_comment("Comment", msg)
+
 	def validate_root_details(self):
 		doc_before_save = self.get_doc_before_save()
 
@@ -140,9 +216,7 @@ class Account(NestedSet):
 
 	def validate_root_company_and_sync_account_to_children(self):
 		# ignore validation while creating new compnay or while syncing to child companies
-		if (
-			frappe.local.flags.ignore_root_company_validation or self.flags.ignore_root_company_validation
-		):
+		if frappe.local.flags.ignore_root_company_validation or self.flags.ignore_root_company_validation:
 			return
 		ancestors = get_root_company(self.company)
 		if ancestors:
@@ -340,7 +414,7 @@ class Account(NestedSet):
 		if self.check_gle_exists():
 			throw(_("Account with existing transaction can not be deleted"))
 
-		super(Account, self).on_trash(True)
+		super().on_trash(True)
 
 
 @frappe.whitelist()
@@ -348,9 +422,8 @@ class Account(NestedSet):
 def get_parent_account(doctype, txt, searchfield, start, page_len, filters):
 	return frappe.db.sql(
 		"""select name from tabAccount
-		where is_group = 1 and docstatus != 2 and company = %s
-		and %s like %s order by name limit %s offset %s"""
-		% ("%s", searchfield, "%s", "%s", "%s"),
+		where is_group = 1 and docstatus != 2 and company = {}
+		and {} like {} order by name limit {} offset {}""".format("%s", searchfield, "%s", "%s", "%s"),
 		(filters["company"], "%%%s%%" % txt, page_len, start),
 		as_list=1,
 	)
@@ -516,7 +589,5 @@ def sync_update_account_number_in_child(
 	if old_acc_number:
 		filters["account_number"] = old_acc_number
 
-	for d in frappe.db.get_values(
-		"Account", filters=filters, fieldname=["company", "name"], as_dict=True
-	):
+	for d in frappe.db.get_values("Account", filters=filters, fieldname=["company", "name"], as_dict=True):
 		update_account_number(d["name"], account_name, account_number, from_descendant=True)

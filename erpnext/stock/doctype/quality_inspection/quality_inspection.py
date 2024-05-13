@@ -14,6 +14,49 @@ from erpnext.stock.doctype.quality_inspection_template.quality_inspection_templa
 
 
 class QualityInspection(Document):
+	# begin: auto-generated types
+	# This code is auto-generated. Do not modify anything in this block.
+
+	from typing import TYPE_CHECKING
+
+	if TYPE_CHECKING:
+		from frappe.types import DF
+
+		from erpnext.stock.doctype.quality_inspection_reading.quality_inspection_reading import (
+			QualityInspectionReading,
+		)
+
+		amended_from: DF.Link | None
+		batch_no: DF.Link | None
+		bom_no: DF.Link | None
+		description: DF.SmallText | None
+		inspected_by: DF.Link
+		inspection_type: DF.Literal["", "Incoming", "Outgoing", "In Process"]
+		item_code: DF.Link
+		item_name: DF.Data | None
+		item_serial_no: DF.Link | None
+		manual_inspection: DF.Check
+		naming_series: DF.Literal["MAT-QA-.YYYY.-"]
+		quality_inspection_template: DF.Link | None
+		readings: DF.Table[QualityInspectionReading]
+		reference_name: DF.DynamicLink
+		reference_type: DF.Literal[
+			"",
+			"Purchase Receipt",
+			"Purchase Invoice",
+			"Subcontracting Receipt",
+			"Delivery Note",
+			"Sales Invoice",
+			"Stock Entry",
+			"Job Card",
+		]
+		remarks: DF.Text | None
+		report_date: DF.Date
+		sample_size: DF.Float
+		status: DF.Literal["", "Accepted", "Rejected"]
+		verified_by: DF.Data | None
+	# end: auto-generated types
+
 	def validate(self):
 		if not self.readings and self.item_code:
 			self.get_item_specification_details()
@@ -68,6 +111,9 @@ class QualityInspection(Document):
 	def on_cancel(self):
 		self.update_qc_reference()
 
+	def on_trash(self):
+		self.update_qc_reference()
+
 	def validate_readings_status_mandatory(self):
 		for reading in self.readings:
 			if not reading.status:
@@ -79,13 +125,11 @@ class QualityInspection(Document):
 		if self.reference_type == "Job Card":
 			if self.reference_name:
 				frappe.db.sql(
-					"""
-					UPDATE `tab{doctype}`
+					f"""
+					UPDATE `tab{self.reference_type}`
 					SET quality_inspection = %s, modified = %s
 					WHERE name = %s and production_item = %s
-				""".format(
-						doctype=self.reference_type
-					),
+				""",
 					(quality_inspection, self.modified, self.reference_name, self.item_code),
 				)
 
@@ -107,9 +151,9 @@ class QualityInspection(Document):
 					args.append(self.name)
 
 				frappe.db.sql(
-					"""
+					f"""
 					UPDATE
-						`tab{child_doc}` t1, `tab{parent_doc}` t2
+						`tab{doctype}` t1, `tab{self.reference_type}` t2
 					SET
 						t1.quality_inspection = %s, t2.modified = %s
 					WHERE
@@ -117,9 +161,7 @@ class QualityInspection(Document):
 						and t1.item_code = %s
 						and t1.parent = t2.name
 						{conditions}
-				""".format(
-						parent_doc=self.reference_type, child_doc=doctype, conditions=conditions
-					),
+				""",
 					args,
 				)
 
@@ -157,7 +199,9 @@ class QualityInspection(Document):
 			reading_value = reading.get("reading_" + str(i))
 			if reading_value is not None and reading_value.strip():
 				result = (
-					flt(reading.get("min_value")) <= parse_float(reading_value) <= flt(reading.get("max_value"))
+					flt(reading.get("min_value"))
+					<= parse_float(reading_value)
+					<= flt(reading.get("max_value"))
 				)
 				if not result:
 					return False
@@ -179,9 +223,9 @@ class QualityInspection(Document):
 		except NameError as e:
 			field = frappe.bold(e.args[0].split()[1])
 			frappe.throw(
-				_("Row #{0}: {1} is not a valid reading field. Please refer to the field description.").format(
-					reading.idx, field
-				),
+				_(
+					"Row #{0}: {1} is not a valid reading field. Please refer to the field description."
+				).format(reading.idx, field),
 				title=_("Invalid Formula"),
 			)
 		except Exception:
@@ -250,40 +294,26 @@ def item_query(doctype, txt, searchfield, start, page_len, filters):
 			qi_condition = ""
 
 		return frappe.db.sql(
-			"""
+			f"""
 				SELECT item_code
-				FROM `tab{doc}`
+				FROM `tab{from_doctype}`
 				WHERE parent=%(parent)s and docstatus < 2 and item_code like %(txt)s
 				{qi_condition} {cond} {mcond}
-				ORDER BY item_code limit {page_len} offset {start}
-			""".format(
-				doc=from_doctype,
-				cond=cond,
-				mcond=mcond,
-				start=cint(start),
-				page_len=cint(page_len),
-				qi_condition=qi_condition,
-			),
+				ORDER BY item_code limit {cint(page_len)} offset {cint(start)}
+			""",
 			{"parent": filters.get("parent"), "txt": "%%%s%%" % txt},
 		)
 
 	elif filters.get("reference_name"):
 		return frappe.db.sql(
-			"""
+			f"""
 				SELECT production_item
-				FROM `tab{doc}`
+				FROM `tab{from_doctype}`
 				WHERE name = %(reference_name)s and docstatus < 2 and production_item like %(txt)s
 				{qi_condition} {cond} {mcond}
 				ORDER BY production_item
-				limit {page_len} offset {start}
-			""".format(
-				doc=from_doctype,
-				cond=cond,
-				mcond=mcond,
-				start=cint(start),
-				page_len=cint(page_len),
-				qi_condition=qi_condition,
-			),
+				limit {cint(page_len)} offset {cint(start)}
+			""",
 			{"reference_name": filters.get("reference_name"), "txt": "%%%s%%" % txt},
 		)
 

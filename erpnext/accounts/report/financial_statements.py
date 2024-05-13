@@ -162,7 +162,6 @@ def get_data(
 	ignore_accumulated_values_for_fy=False,
 	total=True,
 ):
-
 	accounts = get_accounts(company, root_type)
 	if not accounts:
 		return None
@@ -178,7 +177,6 @@ def get_data(
 		root_type,
 		as_dict=1,
 	):
-
 		set_gl_entries_by_account(
 			company,
 			period_list[0]["year_start_date"] if only_current_fiscal_year else None,
@@ -199,7 +197,13 @@ def get_data(
 		ignore_accumulated_values_for_fy,
 	)
 	accumulate_values_into_parents(accounts, accounts_by_name, period_list)
-	out = prepare_data(accounts, balance_must_be, period_list, company_currency)
+	out = prepare_data(
+		accounts,
+		balance_must_be,
+		period_list,
+		company_currency,
+		accumulated_values=filters.accumulated_values,
+	)
 	out = filter_out_zero_value_rows(out, parent_children_map)
 
 	if out and total:
@@ -236,7 +240,8 @@ def calculate_values(
 
 				if entry.posting_date <= period.to_date:
 					if (accumulated_values or entry.posting_date >= period.from_date) and (
-						not ignore_accumulated_values_for_fy or entry.fiscal_year == period.to_date_fiscal_year
+						not ignore_accumulated_values_for_fy
+						or entry.fiscal_year == period.to_date_fiscal_year
 					):
 						d[period.key] = d.get(period.key, 0.0) + flt(entry.debit) - flt(entry.credit)
 
@@ -258,7 +263,7 @@ def accumulate_values_into_parents(accounts, accounts_by_name, period_list):
 			) + d.get("opening_balance", 0.0)
 
 
-def prepare_data(accounts, balance_must_be, period_list, company_currency):
+def prepare_data(accounts, balance_must_be, period_list, company_currency, accumulated_values):
 	data = []
 	year_start_date = period_list[0]["year_start_date"].strftime("%Y-%m-%d")
 	year_end_date = period_list[-1]["year_end_date"].strftime("%Y-%m-%d")
@@ -280,9 +285,7 @@ def prepare_data(accounts, balance_must_be, period_list, company_currency):
 				"is_group": d.is_group,
 				"opening_balance": d.get("opening_balance", 0.0) * (1 if balance_must_be == "Debit" else -1),
 				"account_name": (
-					"%s - %s" % (_(d.account_number), _(d.account_name))
-					if d.account_number
-					else _(d.account_name)
+					f"{_(d.account_number)} - {_(d.account_name)}" if d.account_number else _(d.account_name)
 				),
 			}
 		)
@@ -298,8 +301,14 @@ def prepare_data(accounts, balance_must_be, period_list, company_currency):
 				has_value = True
 				total += flt(row[period.key])
 
-		row["has_value"] = has_value
-		row["total"] = total
+		if accumulated_values:
+			# when 'accumulated_values' is enabled, periods have running balance.
+			# so, last period will have the net amount.
+			row["has_value"] = has_value
+			row["total"] = flt(d.get(period_list[-1].key, 0.0), 3)
+		else:
+			row["has_value"] = has_value
+			row["total"] = total
 		data.append(row)
 
 	return data
@@ -370,7 +379,7 @@ def filter_accounts(accounts, depth=20):
 	def add_to_list(parent, level):
 		if level < depth:
 			children = parent_children_map.get(parent) or []
-			sort_accounts(children, is_root=True if parent == None else False)
+			sort_accounts(children, is_root=True if parent is None else False)
 
 			for child in children:
 				child.indent = level
@@ -561,7 +570,9 @@ def apply_additional_conditions(doctype, query, from_date, ignore_closing_entrie
 			company_fb = frappe.get_cached_value("Company", filters.company, "default_finance_book")
 
 			if filters.finance_book and company_fb and cstr(filters.finance_book) != cstr(company_fb):
-				frappe.throw(_("To use a different finance book, please uncheck 'Include Default FB Entries'"))
+				frappe.throw(
+					_("To use a different finance book, please uncheck 'Include Default FB Entries'")
+				)
 
 			query = query.where(
 				(gl_entry.finance_book.isin([cstr(filters.finance_book), cstr(company_fb), ""]))

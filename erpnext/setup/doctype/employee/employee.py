@@ -48,6 +48,9 @@ class Employee(NestedSet):
 		else:
 			existing_user_id = frappe.db.get_value("Employee", self.name, "user_id")
 			if existing_user_id:
+				user = frappe.get_doc("User", existing_user_id)
+				validate_employee_role(user, ignore_emp_check=True)
+				user.save(ignore_permissions=True)
 				remove_user_permission("Employee", self.name, existing_user_id)
 
 	def after_rename(self, old, new, merge):
@@ -84,7 +87,7 @@ class Employee(NestedSet):
 	def update_user_permissions(self):
 		if not self.create_user_permission:
 			return
-		if not has_permission("User Permission", ptype="write", raise_exception=False):
+		if not has_permission("User Permission", ptype="write", print_logs=False):
 			return
 
 		employee_user_permission_exists = frappe.db.exists(
@@ -184,7 +187,7 @@ class Employee(NestedSet):
 				throw(_("Please enter relieving date."))
 
 	def validate_for_enabled_user_id(self, enabled):
-		if not self.status == "Active":
+		if self.status != "Active":
 			return
 
 		if enabled is None:
@@ -230,18 +233,28 @@ class Employee(NestedSet):
 			frappe.cache().hdel("employees_with_number", prev_number)
 
 
-def validate_employee_role(doc, method):
+def validate_employee_role(doc, method=None, ignore_emp_check=False):
 	# called via User hook
-	if "Employee" in [d.role for d in doc.get("roles")]:
-		if not frappe.db.get_value("Employee", {"user_id": doc.name}):
-			frappe.msgprint(_("Please set User ID field in an Employee record to set Employee Role"))
-			doc.get("roles").remove(doc.get("roles", {"role": "Employee"})[0])
+	if not ignore_emp_check:
+		if frappe.db.get_value("Employee", {"user_id": doc.name}):
+			return
+
+	user_roles = [d.role for d in doc.get("roles")]
+	if "Employee" in user_roles:
+		frappe.msgprint(_("User {0}: Removed Employee role as there is no mapped employee.").format(doc.name))
+		doc.get("roles").remove(doc.get("roles", {"role": "Employee"})[0])
+
+	if "Employee Self Service" in user_roles:
+		frappe.msgprint(
+			_("User {0}: Removed Employee Self Service role as there is no mapped employee.").format(doc.name)
+		)
+		doc.get("roles").remove(doc.get("roles", {"role": "Employee Self Service"})[0])
 
 
 def update_user_permissions(doc, method):
 	# called via User hook
 	if "Employee" in [d.role for d in doc.get("roles")]:
-		if not has_permission("User Permission", ptype="write", raise_exception=False):
+		if not has_permission("User Permission", ptype="write", print_logs=False):
 			return
 		employee = frappe.get_doc("Employee", {"user_id": doc.name})
 		employee.update_user_permissions()
@@ -249,17 +262,13 @@ def update_user_permissions(doc, method):
 
 def get_employee_email(employee_doc):
 	return (
-		employee_doc.get("user_id")
-		or employee_doc.get("personal_email")
-		or employee_doc.get("company_email")
+		employee_doc.get("user_id") or employee_doc.get("personal_email") or employee_doc.get("company_email")
 	)
 
 
 def get_holiday_list_for_employee(employee, raise_exception=True):
 	if employee:
-		holiday_list, company = frappe.get_cached_value(
-			"Employee", employee, ["holiday_list", "company"]
-		)
+		holiday_list, company = frappe.get_cached_value("Employee", employee, ["holiday_list", "company"])
 	else:
 		holiday_list = ""
 		company = frappe.db.get_single_value("Global Defaults", "default_company")
@@ -275,9 +284,7 @@ def get_holiday_list_for_employee(employee, raise_exception=True):
 	return holiday_list
 
 
-def is_holiday(
-	employee, date=None, raise_exception=True, only_non_weekly=False, with_description=False
-):
+def is_holiday(employee, date=None, raise_exception=True, only_non_weekly=False, with_description=False):
 	"""
 	Returns True if given Employee has an holiday on the given date
 	        :param employee: Employee `name`
@@ -347,6 +354,8 @@ def create_user(employee, user=None, email=None):
 		}
 	)
 	user.insert()
+	emp.user_id = user.name
+	emp.save()
 	return user.name
 
 
@@ -385,7 +394,6 @@ def get_employee_emails(employee_list):
 
 @frappe.whitelist()
 def get_children(doctype, parent=None, company=None, is_root=False, is_tree=False):
-
 	filters = [["status", "=", "Active"]]
 	if company and company != "All Companies":
 		filters.append(["company", "=", company])

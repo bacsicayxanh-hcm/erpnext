@@ -4,7 +4,7 @@
 
 import frappe
 from frappe import _
-from frappe.utils import cint, flt, getdate
+from frappe.utils import cint, flt, get_table_name, getdate
 from frappe.utils.deprecations import deprecated
 from pypika import functions as fn
 
@@ -13,14 +13,32 @@ from erpnext.stock.doctype.warehouse.warehouse import apply_warehouse_filter
 SLE_COUNT_LIMIT = 10_000
 
 
+def _estimate_table_row_count(doctype: str):
+	table = get_table_name(doctype)
+	return cint(
+		frappe.db.sql(
+			f"""select table_rows
+			   from  information_schema.tables
+			   where table_name = '{table}' ;"""
+		)[0][0]
+	)
+
+
 def execute(filters=None):
 	if not filters:
 		filters = {}
 
-	sle_count = frappe.db.count("Stock Ledger Entry")
+	sle_count = _estimate_table_row_count("Stock Ledger Entry")
 
-	if sle_count > SLE_COUNT_LIMIT and not filters.get("item_code") and not filters.get("warehouse"):
-		frappe.throw(_("Please select either the Item or Warehouse filter to generate the report."))
+	if (
+		sle_count > SLE_COUNT_LIMIT
+		and not filters.get("item_code")
+		and not filters.get("warehouse")
+		and not filters.get("warehouse_type")
+	):
+		frappe.throw(
+			_("Please select either the Item or Warehouse or Warehouse Type filter to generate the report.")
+		)
 
 	if filters.from_date > filters.to_date:
 		frappe.throw(_("From Date must be before To Date"))
@@ -59,18 +77,18 @@ def execute(filters=None):
 def get_columns(filters):
 	"""return columns based on filters"""
 
-	columns = (
-		[_("Item") + ":Link/Item:100"]
-		+ [_("Item Name") + "::150"]
-		+ [_("Description") + "::150"]
-		+ [_("Warehouse") + ":Link/Warehouse:100"]
-		+ [_("Batch") + ":Link/Batch:100"]
-		+ [_("Opening Qty") + ":Float:90"]
-		+ [_("In Qty") + ":Float:80"]
-		+ [_("Out Qty") + ":Float:80"]
-		+ [_("Balance Qty") + ":Float:90"]
-		+ [_("UOM") + "::90"]
-	)
+	columns = [
+		_("Item") + ":Link/Item:100",
+		_("Item Name") + "::150",
+		_("Description") + "::150",
+		_("Warehouse") + ":Link/Warehouse:100",
+		_("Batch") + ":Link/Batch:100",
+		_("Opening Qty") + ":Float:90",
+		_("In Qty") + ":Float:80",
+		_("Out Qty") + ":Float:80",
+		_("Balance Qty") + ":Float:90",
+		_("UOM") + "::90",
+	]
 
 	return columns
 
@@ -110,6 +128,16 @@ def get_stock_ledger_entries_for_batch_no(filters):
 	)
 
 	query = apply_warehouse_filter(query, sle, filters)
+	if filters.warehouse_type and not filters.warehouse:
+		warehouses = frappe.get_all(
+			"Warehouse",
+			filters={"warehouse_type": filters.warehouse_type, "is_group": 0},
+			pluck="name",
+		)
+
+		if warehouses:
+			query = query.where(sle.warehouse.isin(warehouses))
+
 	for field in ["item_code", "batch_no", "company"]:
 		if filters.get(field):
 			query = query.where(sle[field] == filters.get(field))
@@ -143,6 +171,16 @@ def get_stock_ledger_entries_for_batch_bundle(filters):
 	)
 
 	query = apply_warehouse_filter(query, sle, filters)
+	if filters.warehouse_type and not filters.warehouse:
+		warehouses = frappe.get_all(
+			"Warehouse",
+			filters={"warehouse_type": filters.warehouse_type, "is_group": 0},
+			pluck="name",
+		)
+
+		if warehouses:
+			query = query.where(sle.warehouse.isin(warehouses))
+
 	for field in ["item_code", "batch_no", "company"]:
 		if filters.get(field):
 			if field == "batch_no":
@@ -184,9 +222,7 @@ def get_item_warehouse_batch_map(filters, float_precision):
 
 def get_item_details(filters):
 	item_map = {}
-	for d in (frappe.qb.from_("Item").select("name", "item_name", "description", "stock_uom")).run(
-		as_dict=1
-	):
+	for d in (frappe.qb.from_("Item").select("name", "item_name", "description", "stock_uom")).run(as_dict=1):
 		item_map.setdefault(d.name, d)
 
 	return item_map
